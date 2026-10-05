@@ -1,214 +1,300 @@
-(() => {
-  const graph = window.KINSHIP_GRAPH;
-  const svg = document.getElementById("kinship-map");
-  const viewport = document.getElementById("viewport");
-  const peopleLayer = document.getElementById("person-layer");
-  const partnershipLayer = document.getElementById("partnership-layer");
-  const relationshipLayer = document.getElementById("relationship-layer");
-  const connectionMenu = document.getElementById("connection-menu");
-  const people = new Map(graph.people.map((person) => [person.id, person]));
-  let selectedId = null;
-  let transform = { x: 0, y: 0, scale: 1 };
-  let dragging = false;
-  let start = null;
+import { calculateLayout } from "./graph-layout.js";
+import { highlightRelationships, renderGraph } from "./graph-renderer.js";
+import { connectGraphInteractions } from "./graph-interactions.js";
 
-  const el = (tag, attrs = {}) => {
-    const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
-    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
-    return node;
-  };
-  const formatYear = (value) => value ? value.slice(0, 4) : "—";
-  const label = (person) => `${person.given_name} ${person.family_name}`;
+const svg = document.getElementById("kinship-map");
+const viewport = document.getElementById("viewport");
+const details = document.querySelector(".details");
+const mapColumn = document.querySelector(".map-column");
+const menu = document.getElementById("connection-menu");
+const graphError = document.getElementById("graph-error");
+let graph = JSON.parse(document.getElementById("kinship-graph-data").textContent);
+let layout;
+let selectedId = null;
+let rootId = null;
+let scope = "all";
+let selectedRelativeRelation = null;
+let visibleIds = new Set();
 
-  const CARD_WIDTH = 196;
-  const CARD_HEIGHT = 176;
-  const CARD_TOP = (person) => person.y - CARD_HEIGHT / 2;
-  const CARD_BOTTOM = (person) => person.y + CARD_HEIGHT / 2;
-  const addText = (group, text, attrs) => {
-    const node = el("text", attrs);
-    node.textContent = text;
-    group.append(node);
-    return node;
-  };
+const label = (person) => `${person.given_name} ${person.family_name}`.trim();
+const byId = () => new Map(graph.people.map((person) => [person.id, person]));
+const peopleById = byId();
+const postHeaders = () => ({
+  "Content-Type": "application/json",
+  "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+});
 
-  graph.partnerships.forEach((partnership) => {
-    const a = people.get(partnership.partner_ids[0]);
-    const b = people.get(partnership.partner_ids[1]);
-    partnershipLayer.append(el("path", {
-      d: `M ${a.x} ${CARD_BOTTOM(a)} V ${partnership.y} H ${b.x} V ${CARD_BOTTOM(b)}`,
-      class: "partnership-line",
-    }));
-    partnershipLayer.append(el("circle", { cx: partnership.x, cy: partnership.y, r: 6, class: "partnership-junction" }));
+function directionalSet(direction) {
+  if (selectedId === null) return new Set(graph.people.map((person) => person.id));
+  const ids = new Set([selectedId]);
+  const queue = [selectedId];
+  const links = graph.parent_child;
+  while (queue.length) {
+    const current = queue.shift();
+    const related = direction === "ancestors"
+      ? links.filter((link) => link.child_id === current).map((link) => link.parent_id)
+      : links.filter((link) => link.parent_id === current).map((link) => link.child_id);
+    related.forEach((id) => {
+      if (!ids.has(id)) {
+        ids.add(id);
+        queue.push(id);
+      }
+    });
+  }
+  (graph.siblings || []).forEach(({ person_ids }) => {
+    if (person_ids.includes(selectedId)) person_ids.forEach((id) => ids.add(id));
   });
-  const partnershipChildren = new Map();
+  return ids;
+}
+
+function visibilityForScope() {
+  if (scope === "ancestors" || scope === "collapsed") return directionalSet("ancestors");
+  if (scope === "descendants") return directionalSet("descendants");
+  return new Set(graph.people.map((person) => person.id));
+}
+
+function updateSelectionPanel(person) {
+  document.getElementById("empty-state").hidden = true;
+  document.getElementById("add-person-details").hidden = true;
+  document.getElementById("person-details").hidden = false;
+  document.getElementById("record-initials").textContent = `${person.given_name[0] || ""}${person.family_name[0] || ""}`;
+  document.getElementById("record-name").textContent = label(person);
+  document.getElementById("edit-given-name").value = person.given_name;
+  document.getElementById("edit-family-name").value = person.family_name;
+  document.getElementById("edit-birth-date").value = person.birth_date || "";
+  document.getElementById("edit-death-date").value = person.death_date || "";
+  document.getElementById("edit-sex").value = person.sex;
+  document.getElementById("edit-notes").value = person.notes || "";
+  const connections = [];
   graph.parent_child.forEach((link) => {
-    const key = link.partnership_id ? `${link.partnership_id}:${link.child_id}` : `person:${link.parent_id}:${link.child_id}`;
-    if (!partnershipChildren.has(key)) partnershipChildren.set(key, []);
-    partnershipChildren.get(key).push(link);
+    if (link.parent_id === person.id) connections.push(["Child", peopleById.get(link.child_id)]);
+    if (link.child_id === person.id) {
+      const parent = peopleById.get(link.parent_id);
+      connections.push([parent.sex === "F" ? "Mother" : parent.sex === "M" ? "Father" : "Parent", parent]);
+    }
   });
-  partnershipChildren.forEach((links) => {
-    const first = links[0];
-    const child = people.get(first.child_id);
-    const partnership = first.partnership_id && graph.partnerships.find((item) => item.id === first.partnership_id);
-    const parent = people.get(first.parent_id);
-    const sourceX = partnership ? partnership.x : parent.x;
-    const sourceY = partnership ? partnership.y : CARD_BOTTOM(parent);
-    const branchY = child.y - CARD_HEIGHT / 2 - 32;
-    relationshipLayer.append(el("path", {
-      d: `M ${sourceX} ${sourceY} V ${branchY} H ${child.x} V ${CARD_TOP(child)}`,
-      class: "relationship",
-      "data-parent": links.map((link) => link.parent_id).join(","),
-      "data-child": first.child_id,
-    }));
+  graph.partnerships.forEach((union) => {
+    if (union.partner_ids.includes(person.id)) {
+      const other = union.partner_ids.find((id) => id !== person.id);
+      connections.push(["Partner", peopleById.get(other)]);
+    }
   });
-  graph.people.forEach((person) => {
-    const node = el("g", { class: "person-node", "data-id": person.id, tabindex: "0", role: "button", "aria-label": `Select ${label(person)}` });
-    const left = person.x - CARD_WIDTH / 2;
-    const top = CARD_TOP(person);
-    const accent = person.sex === "F" ? "#d93572" : "#25a9c5";
-    node.append(el("rect", { x: left, y: top, width: CARD_WIDTH, height: CARD_HEIGHT, rx: 7, class: "person-card", filter: "url(#soft-shadow)" }));
-    node.append(el("rect", { x: left, y: top, width: CARD_WIDTH, height: 5, rx: 3, fill: accent, class: "card-accent" }));
-    node.append(el("circle", { cx: person.x, cy: top + 48, r: 29, fill: person.sex === "F" ? "#ffd8e4" : "#b9f0fa", class: "avatar-bg" }));
-    node.append(el("path", { d: `M ${person.x - 14} ${top + 58} Q ${person.x - 12} ${top + 39} ${person.x} ${top + 37} Q ${person.x + 12} ${top + 39} ${person.x + 14} ${top + 58} Z`, fill: person.sex === "F" ? "#9d0f4b" : "#006887", class: "avatar-silhouette" }));
-    node.append(el("circle", { cx: person.x, cy: top + 37, r: 9, fill: person.sex === "F" ? "#9d0f4b" : "#006887" }));
-    const addButton = addText(node, "+", { x: left + CARD_WIDTH - 18, y: top + 30, "text-anchor": "middle", class: "card-plus", tabindex: "0", role: "button", "aria-label": `Add a person related to ${label(person)}` });
-    addButton.addEventListener("click", (event) => { event.stopPropagation(); openConnectionMenu(person.id, addButton); });
-    addButton.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.stopPropagation(); openConnectionMenu(person.id, addButton); } });
-    addText(node, person.given_name, { x: person.x, y: top + 104, "text-anchor": "middle", class: "card-name" });
-    addText(node, person.family_name, { x: person.x, y: top + 124, "text-anchor": "middle", class: "card-name" });
-    addText(node, `${formatYear(person.birth_date)}–${formatYear(person.death_date) === "—" ? "living" : formatYear(person.death_date)}`, { x: person.x, y: top + 143, "text-anchor": "middle", class: "node-meta" });
-    addText(node, `G1NC-${String(person.id).padStart(3, "0")}`, { x: person.x, y: top + 159, "text-anchor": "middle", class: "node-id" });
-    node.addEventListener("click", () => select(person.id));
-    node.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") select(person.id); });
-    peopleLayer.append(node);
+  (graph.siblings || []).forEach(({ person_ids }) => {
+    if (person_ids.includes(person.id)) {
+      const siblingId = person_ids.find((id) => id !== person.id);
+      connections.push(["Sibling", peopleById.get(siblingId)]);
+    }
   });
+  connections.sort(([a], [b]) => ({ Father: 0, Mother: 1, Parent: 2, Partner: 3, Sibling: 4, Child: 5 }[a] ?? 6)
+    - ({ Father: 0, Mother: 1, Parent: 2, Partner: 3, Sibling: 4, Child: 5 }[b] ?? 6));
+  const list = document.getElementById("connection-list");
+  list.replaceChildren();
+  connections.forEach(([kind, linked]) => {
+    if (!linked) return;
+    const item = document.createElement("li");
+    const labelNode = document.createElement("small");
+    labelNode.textContent = kind;
+    item.append(labelNode, document.createTextNode(label(linked)));
+    list.append(item);
+  });
+}
 
-  function select(id) {
-    selectedId = id;
-    document.querySelector(".details").classList.remove("details-hidden");
-    document.querySelector(".map-column").classList.remove("map-expanded");
-    document.getElementById("add-person-details").hidden = true;
-    const person = people.get(id);
-    document.querySelectorAll(".person-node").forEach((node) => node.classList.toggle("selected", Number(node.dataset.id) === id));
-    const related = new Set([id]);
-    graph.parent_child.forEach((link) => { if (link.parent_id === id) related.add(link.child_id); if (link.child_id === id) related.add(link.parent_id); });
-    graph.partnerships.forEach((item) => { if (item.partner_ids.includes(id)) item.partner_ids.forEach((partner) => related.add(partner)); });
-    document.querySelectorAll(".person-node").forEach((node) => node.classList.toggle("dimmed", !related.has(Number(node.dataset.id))));
-    document.querySelectorAll(".relationship").forEach((line) => {
-      const parents = line.dataset.parent.split(",").map(Number);
-      line.classList.toggle("dimmed", !parents.includes(id) && Number(line.dataset.child) !== id);
+function render({ fit = false, focusId = null } = {}) {
+  try {
+    document.getElementById("person-count").textContent = String(graph.people.length).padStart(2, "0");
+    visibleIds = visibilityForScope();
+    layout = calculateLayout(graph, { visibleIds, rootId });
+    graphError.hidden = true;
+    renderGraph({
+      graph,
+      layout,
+      svg,
+      selectedId,
+      onSelect: selectPerson,
+      onAdd: openConnectionMenu,
     });
-    document.getElementById("empty-state").hidden = true;
-    document.getElementById("person-details").hidden = false;
-    document.getElementById("record-initials").textContent = `${person.given_name[0]}${person.family_name[0]}`;
-    document.getElementById("record-name").textContent = label(person);
-    document.getElementById("record-id").textContent = `PERSON / ${String(person.id).padStart(4, "0")}`;
-    document.getElementById("edit-given-name").value = person.given_name;
-    document.getElementById("edit-family-name").value = person.family_name;
-    document.getElementById("edit-birth-date").value = person.birth_date || "";
-    document.getElementById("edit-death-date").value = person.death_date || "";
-    document.getElementById("edit-sex").value = person.sex;
-    document.getElementById("edit-notes").value = person.notes || "";
-    const links = [];
-    graph.parent_child.forEach((link) => {
-      if (link.parent_id === id) links.push(["Child", people.get(link.child_id)]);
-      if (link.child_id === id) links.push([people.get(link.parent_id).sex === "F" ? "Mother" : "Father", people.get(link.parent_id)]);
-    });
-    graph.partnerships.forEach((item) => { if (item.partner_ids.includes(id)) links.push(["Partner", people.get(item.partner_ids.find((partner) => partner !== id))]); });
-    links.sort(([kindA], [kindB]) => ({ Father: 0, Mother: 1, Partner: 2, Child: 3 }[kindA] ?? 4) - ({ Father: 0, Mother: 1, Partner: 2, Child: 3 }[kindB] ?? 4));
-    document.getElementById("connection-list").innerHTML = links.map(([kind, linked]) => `<li><small>${kind}</small>${label(linked)}</li>`).join("");
+    if (selectedId !== null) highlightRelationships(svg, graph, selectedId);
+    if (fit) controls.fit(layout, visibleIds, focusId);
+  } catch (error) {
+    graphError.textContent = error.message;
+    graphError.hidden = false;
+    console.error(error);
   }
-  function openConnectionMenu(anchorId, button) {
-    const frame = document.querySelector(".map-frame").getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-    connectionMenu.style.left = `${buttonRect.left - frame.left - 12}px`;
-    connectionMenu.style.top = `${buttonRect.bottom - frame.top + 8}px`;
-    connectionMenu.hidden = false;
-    connectionMenu.dataset.anchorId = anchorId;
-  }
-  function openAddPerson(anchorId, relation) {
-    connectionMenu.hidden = true;
-    selectedId = anchorId;
-    document.getElementById("person-details").hidden = true;
-    document.getElementById("empty-state").hidden = true;
-    document.getElementById("add-person-details").hidden = false;
-    document.getElementById("add-person-form").dataset.anchorId = anchorId;
-    document.getElementById("add-relation").value = relation;
-    document.getElementById("add-relation-label").textContent = `Relationship: ${relation}`;
-    document.getElementById("add-person-title").textContent = `Add a person to ${label(people.get(anchorId))}`;
-    document.getElementById("add-given-name").focus();
-  }
-  connectionMenu.querySelectorAll("button").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openAddPerson(Number(connectionMenu.dataset.anchorId), button.dataset.relation);
-    });
+}
+
+function selectPerson(id) {
+  selectedId = id;
+  scope = "all";
+  menu.hidden = true;
+  details.classList.remove("details-hidden");
+  mapColumn.classList.remove("map-expanded");
+  updateSelectionPanel(peopleById.get(id));
+  render({ fit: true, focusId: id });
+}
+
+function openConnectionMenu(anchorId, button) {
+  const frame = document.querySelector(".map-frame").getBoundingClientRect();
+  const buttonRect = button.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(buttonRect.left - frame.left - 12, frame.width - 210))}px`;
+  menu.style.top = `${Math.min(buttonRect.bottom - frame.top + 8, frame.height - 180)}px`;
+  menu.hidden = false;
+  menu.dataset.anchorId = anchorId;
+}
+
+function beginAddRelative(anchorId, relation) {
+  selectedRelativeRelation = relation;
+  menu.hidden = true;
+  details.classList.remove("details-hidden");
+  mapColumn.classList.remove("map-expanded");
+  document.getElementById("person-details").hidden = true;
+  document.getElementById("empty-state").hidden = true;
+  document.getElementById("add-person-details").hidden = false;
+  document.getElementById("add-person-form").dataset.anchorId = anchorId;
+  document.getElementById("add-relation").value = relation;
+  document.getElementById("add-relation-label").textContent = `Relationship: ${relation}`;
+  document.getElementById("add-person-title").textContent = `Add a ${relation} for ${label(peopleById.get(anchorId))}`;
+  const unions = graph.partnerships.filter((union) => union.partner_ids.includes(anchorId));
+  const unionField = document.getElementById("child-union-field");
+  const unionSelect = document.getElementById("add-partnership");
+  unionSelect.replaceChildren();
+  const ownOption = new Option("This person only", "");
+  unionSelect.add(ownOption);
+  unions.forEach((union) => {
+    const otherId = union.partner_ids.find((id) => id !== anchorId);
+    unionSelect.add(new Option(`With ${label(peopleById.get(otherId))}`, union.id));
   });
-  document.getElementById("add-person-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const status = document.getElementById("add-status");
-    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-    data.anchor_id = Number(event.currentTarget.dataset.anchorId);
-    delete data.csrfmiddlewaretoken;
-    status.textContent = "Saving…";
-    try {
-      const response = await fetch("/api/people/add/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value },
-        body: JSON.stringify(data),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Unable to add person.");
-      status.textContent = "Saved. Refreshing map…";
-      window.location.reload();
-    } catch (error) {
-      status.textContent = error.message;
+  unionField.hidden = relation !== "child" || unions.length === 0;
+  unionSelect.disabled = relation !== "child";
+  document.getElementById("add-given-name").focus();
+}
+
+const controls = connectGraphInteractions({
+  svg,
+  viewport,
+  onBackground: () => {
+    menu.hidden = true;
+    details.classList.add("details-hidden");
+    mapColumn.classList.add("map-expanded");
+  },
+  controls: {
+    zoomIn: document.getElementById("zoom-in"),
+    zoomOut: document.getElementById("zoom-out"),
+  },
+});
+
+menu.querySelectorAll("[data-relation]").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    beginAddRelative(Number(menu.dataset.anchorId), button.dataset.relation);
+  });
+});
+
+document.getElementById("add-person-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.getElementById("add-status");
+  const payload = Object.fromEntries(new FormData(form).entries());
+  payload.anchor_id = Number(form.dataset.anchorId);
+  payload.relation = selectedRelativeRelation;
+  if (payload.partnership_id) payload.partnership_id = Number(payload.partnership_id);
+  else delete payload.partnership_id;
+  delete payload.csrfmiddlewaretoken;
+  status.textContent = "Saving…";
+  try {
+    const response = await fetch("/api/people/add/", { method: "POST", headers: postHeaders(), body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Unable to add this relative.");
+    graph = await fetch("/api/graph/").then((res) => {
+      if (!res.ok) throw new Error("The new person was saved, but the graph could not be refreshed.");
+      return res.json();
+    });
+    peopleById.clear();
+    graph.people.forEach((person) => peopleById.set(person.id, person));
+    selectedId = result.person.id;
+    rootId = null;
+    scope = "all";
+    updateSelectionPanel(peopleById.get(selectedId));
+    render({ fit: true, focusId: selectedId });
+    status.textContent = "Person added.";
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+document.getElementById("person-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const status = document.getElementById("save-status");
+  const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+  delete payload.csrfmiddlewaretoken;
+  status.textContent = "Saving…";
+  try {
+    const response = await fetch(`/api/people/${selectedId}/`, { method: "POST", headers: postHeaders(), body: JSON.stringify(payload) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Unable to save this record.");
+    graph = await fetch("/api/graph/").then((res) => res.json());
+    peopleById.clear();
+    graph.people.forEach((person) => peopleById.set(person.id, person));
+    updateSelectionPanel(peopleById.get(selectedId));
+    render();
+    status.textContent = "Saved.";
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+function applyScope(nextScope) {
+  scope = nextScope;
+  if (scope !== "all" && selectedId === null) {
+    graphError.textContent = "Select a person first.";
+    graphError.hidden = false;
+    return;
+  }
+  render({ fit: true, focusId: selectedId });
+}
+
+document.getElementById("show-tree").addEventListener("click", () => {
+  scope = "all";
+  rootId = null;
+  selectedId = null;
+  menu.hidden = true;
+  document.getElementById("person-details").hidden = true;
+  document.getElementById("add-person-details").hidden = true;
+  document.getElementById("empty-state").hidden = false;
+  render({ fit: true });
+});
+document.getElementById("show-ancestors").addEventListener("click", () => applyScope("ancestors"));
+document.getElementById("show-descendants").addEventListener("click", () => applyScope("descendants"));
+document.getElementById("collapse-branches").addEventListener("click", () => applyScope("collapsed"));
+document.getElementById("set-root").addEventListener("click", () => {
+  if (selectedId === null) return;
+  rootId = selectedId;
+  scope = "all";
+  render({ fit: true, focusId: selectedId });
+});
+document.getElementById("center-selected").addEventListener("click", () => {
+  if (selectedId !== null) controls.fit(layout, visibleIds, selectedId);
+});
+document.getElementById("fit-view").addEventListener("click", () => controls.fit(layout, visibleIds));
+document.getElementById("person-search").addEventListener("input", (event) => {
+  const term = event.target.value.trim().toLocaleLowerCase();
+  svg.querySelectorAll(".person-node").forEach((node) => {
+    const person = peopleById.get(Number(node.dataset.id));
+    node.classList.toggle("dimmed", Boolean(term) && !label(person).toLocaleLowerCase().includes(term));
+  });
+  if (term) {
+    const match = graph.people.find((person) => label(person).toLocaleLowerCase().includes(term));
+    if (match) {
+      if (!visibleIds.has(match.id)) scope = "all";
+      selectPerson(match.id);
     }
-  });
-  document.getElementById("person-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const status = document.getElementById("save-status");
-    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-    delete data.csrfmiddlewaretoken;
-    status.textContent = "Saving…";
-    try {
-      const response = await fetch(`/api/people/${selectedId}/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": data.csrfmiddlewaretoken || document.querySelector("[name=csrfmiddlewaretoken]").value },
-        body: JSON.stringify(data),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Unable to save record.");
-      status.textContent = "Saved. Refreshing map…";
-      window.location.reload();
-    } catch (error) {
-      status.textContent = error.message;
-    }
-  });
-  function applyTransform() { viewport.setAttribute("transform", `translate(${transform.x} ${transform.y}) scale(${transform.scale})`); }
-  function reset() { transform = { x: 0, y: 0, scale: 1 }; applyTransform(); }
-  document.getElementById("reset-view").addEventListener("click", reset);
-  document.getElementById("fit-view").addEventListener("click", reset);
-  document.getElementById("person-search").addEventListener("input", (event) => {
-    const term = event.target.value.toLowerCase();
-    document.querySelectorAll(".person-node").forEach((node) => node.classList.toggle("dimmed", term && !label(people.get(Number(node.dataset.id))).toLowerCase().includes(term)));
-  });
-  svg.addEventListener("wheel", (event) => { event.preventDefault(); transform.scale = Math.max(.65, Math.min(1.8, transform.scale + (event.deltaY < 0 ? .08 : -.08))); applyTransform(); }, { passive: false });
-  svg.addEventListener("pointerdown", (event) => { if (event.target.closest(".person-node")) return; dragging = true; start = { x: event.clientX - transform.x, y: event.clientY - transform.y }; svg.setPointerCapture(event.pointerId); });
-  svg.addEventListener("pointermove", (event) => { if (!dragging) return; transform.x = event.clientX - start.x; transform.y = event.clientY - start.y; applyTransform(); });
-  svg.addEventListener("pointerup", () => { dragging = false; });
-  svg.addEventListener("click", (event) => {
-    if (!event.target.closest(".person-node") && !event.target.closest(".card-plus")) {
-      connectionMenu.hidden = true;
-        document.querySelector(".details").classList.add("details-hidden");
-        document.querySelector(".map-column").classList.add("map-expanded");
-      }
-  });
-  document.addEventListener("click", (event) => {
-      if (!event.target.closest(".details") && !event.target.closest(".person-node") && !event.target.closest("#connection-menu")) {
-        connectionMenu.hidden = true;
-        document.querySelector(".details").classList.add("details-hidden");
-        document.querySelector(".map-column").classList.add("map-expanded");
-      }
-  });
-})();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest(".details") || event.target.closest(".person-node") || event.target.closest("#connection-menu")) return;
+  menu.hidden = true;
+  details.classList.add("details-hidden");
+  mapColumn.classList.add("map-expanded");
+});
+
+render({ fit: true });

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -89,5 +90,33 @@ class ParentChild(models.Model):
             ),
         ]
 
+    def clean(self):
+        if self.partnership_id and self.parent_id:
+            partnership = self.partnership
+            if self.parent_id not in (partnership.partner_a_id, partnership.partner_b_id):
+                raise ValidationError({"partnership": "The parent must be one of the partners in this union."})
+
     def __str__(self):
         return f"{self.parent} → {self.child}"
+
+
+class SiblingRelationship(models.Model):
+    person_a = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="sibling_links_as_a"
+    )
+    person_b = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="sibling_links_as_b"
+    )
+    label = models.CharField(max_length=80, blank=True)
+
+    class Meta:
+        ordering = ["person_a_id", "person_b_id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(person_a=models.F("person_b")),
+                name="sibling_people_differ",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.person_a} ↔ {self.person_b}"

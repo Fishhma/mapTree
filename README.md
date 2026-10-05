@@ -26,8 +26,15 @@ python manage.py test
 
 ## Project structure
 
-- `genealogy/models.py` — normalized `Person`, `Partnership`, and `ParentChild` models.
-- `genealogy/views.py` — graph data and person/relationship update endpoints.
+- `genealogy/models.py` — normalized `Person`, `Partnership`, `ParentChild`, and explicit sibling-assertion models.
+- `genealogy/views.py` — relationship facts only; graph coordinates are never stored.
 - `templates/genealogy/map.html` — accessible page structure.
-- `static/genealogy/map.js` — SVG graph rendering and interactions.
+- `static/genealogy/graph-layout.js` — partnership-aware generation calculation and stable lane layout.
+- `static/genealogy/graph-renderer.js` — SVG cards and relationship connectors.
+- `static/genealogy/graph-interactions.js` — viewport pan, zoom, and fit.
+- `static/genealogy/map.js` — selection, relatives, filtering, root navigation, and graph updates.
 - `static/genealogy/map.css` — visual styling.
+
+Generation assignment treats partners and explicitly linked siblings as same-generation groups. Parent-child links create directed generation constraints; an ancestry cycle or incompatible union is reported rather than assigned a misleading layout. Missing/unknown parents remain absent. Child creation can specify the selected partnership so children stay with the correct union.
+
+Run the dependency-free graph layout tests with `npm run test:graph`.

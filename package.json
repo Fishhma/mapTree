@@ -1,0 +1,8 @@
+{
+  "name": "maptree-graph-layout-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:graph": "node --test tests_js/graph-layout.test.js"
+  }
+}

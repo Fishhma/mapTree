@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ParentChild, Partnership, Person
+from .models import ParentChild, Partnership, Person, SiblingRelationship
 
 
 @admin.register(Person)
@@ -22,3 +22,10 @@ class ParentChildAdmin(admin.ModelAdmin):
     list_display = ("parent", "child", "partnership", "birth_order")
     list_filter = ("partnership",)
     autocomplete_fields = ("parent", "child", "partnership")
+
+
+@admin.register(SiblingRelationship)
+class SiblingRelationshipAdmin(admin.ModelAdmin):
+    list_display = ("person_a", "person_b", "label")
+    autocomplete_fields = ("person_a", "person_b")
+    search_fields = ("person_a__given_name", "person_a__family_name", "person_b__given_name", "person_b__family_name")
