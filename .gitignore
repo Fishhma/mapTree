@@ -1,7 +1,7 @@
+# Личные данные: GEDCOM и предпросмотры древа с живыми людьми не публикуем
+*.ged
+*.svg
 __pycache__/
-*.py[cod]
-db.sqlite3
 .venv/
-staticfiles/
-.idea/
-.vscode/
+db.sqlite3
+media/
