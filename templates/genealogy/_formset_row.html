@@ -1,0 +1,8 @@
+<div class="row">
+  {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+  {{ f.non_field_errors }}
+  {% for field in f.visible_fields %}{% if field.name != "DELETE" %}
+    <label class="field"><span>{{ field.label|capfirst }}</span>{{ field }}{{ field.errors }}</label>
+  {% endif %}{% endfor %}
+  {% if f.instance.pk %}<label class="row-delete">{{ f.DELETE }} удалить</label>{% endif %}
+</div>

@@ -1,0 +1,9 @@
+<div class="head">
+  <span class="sex {{ person.sex }}"></span>
+  <div>
+    <h1>{{ person.given_name|default:"?" }}
+      {% if person.patronymic %}<span class="patr">{{ person.patronymic }}</span>{% endif %}
+      {% if person.birth_surname %}{{ person.birth_surname }}{% endif %}</h1>
+    <p class="meta">{% if years %}{{ years }} · {% endif %}{{ person.code }}</p>
+  </div>
+</div>

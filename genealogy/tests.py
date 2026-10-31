@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
 
-from .models import Event, Family, Person, Place, TreeSettings
+from .models import Event, Family, Person, Place, Source, SourceFile, TreeSettings
 
 GED = Path(__file__).resolve().parent.parent / "tests" / "rootsmagic_tree.ged"
 
@@ -209,7 +209,7 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
 
 
 class PersonPageTest(SmallTreeMixin, TestCase):
-    """Страница /people/P0001/: правка и удаление только здесь."""
+    """Страница /people/P0001/: вкладки, правка и удаление только здесь."""
 
     def setUp(self):
         self.make_tree()
@@ -217,19 +217,46 @@ class PersonPageTest(SmallTreeMixin, TestCase):
     def url(self, person):
         return f"/people/{person.code}/"
 
-    def save(self, person, follow=False, **fields):
-        data = {"given_name": person.given_name, "sex": person.sex, **fields}
-        return self.client.post(self.url(person), data, follow=follow)
+    def page_data(self, person, **changes):
+        """Что браузер отправит, если ничего не трогать; changes правят поля (None — убрать поле)."""
+        from .forms import person_forms
+        data = {}
+        for f in person_forms(Person.objects.get(pk=person.pk)).values():
+            parts = [f.management_form, *f.forms] if hasattr(f, "management_form") else [f]
+            for form in parts:
+                for bound in form:
+                    value = bound.value()
+                    if value is not None and value is not False and value != "":
+                        data[bound.html_name] = value
+        for key, value in changes.items():
+            if value is None:
+                data.pop(key, None)
+            else:
+                data[key] = value
+        return data
+
+    def save(self, person, follow=False, fetch=False, **changes):
+        headers = {"X-Requested-With": "fetch"} if fetch else {}
+        return self.client.post(self.url(person), self.page_data(person, **changes), follow=follow,
+                                headers=headers)
 
     def test_page_shows_person_and_family(self):
         r = self.client.get(self.url(self.libor))
         self.assertContains(r, "Libor")
         self.assertContains(r, self.url(self.marian))              # ссылка на ребёнка
         self.assertContains(r, "Удалить нельзя")                    # у Libor есть и отец, и дети
+        for tab in ("О человеке", 'Источники (<span data-count="sources">0</span>)',
+                    'Воспоминания (<span data-count="memories">0</span>)'):
+            self.assertContains(r, tab)
         self.assertEqual(self.client.get("/people/P9999/").status_code, 404)
 
     def test_marian_birth_date_shown_in_user_format(self):
         self.assertContains(self.client.get(self.url(self.marian)), 'value="06.01.2007"')
+
+    def test_timeline_has_own_events_marriages_and_children(self):
+        Event.objects.create(family=self.libor.families.get(partner2=self.julia), kind="MARR", date="2005")
+        titles = [t["title"] for t in self.client.get(self.url(self.libor)).context["timeline"]]
+        self.assertEqual(titles, ["Рождение сына", "Брак", "Рождение сына", "Брак"])   # 1986, 2005, 2007, без даты
 
     def test_save_fields_and_key_events(self):
         r = self.save(self.uncle, given_name="Дядя Ваня", patronymic="Петрович", sex="M",
@@ -243,28 +270,54 @@ class PersonPageTest(SmallTreeMixin, TestCase):
         self.assertEqual(uncle.events.get(kind="DEAT").date, "2 MAR 2020")
 
     def test_clearing_key_event_removes_it(self):
-        self.save(self.ondrej)                                     # дату рождения стёрли
+        self.save(self.ondrej, BIRT_date=None)                     # дату рождения стёрли
         self.assertFalse(self.ondrej.events.filter(kind="BIRT").exists())
 
     def test_cleared_event_with_description_is_kept(self):
         Event.objects.filter(person=self.ondrej, kind="BIRT").update(description="в роддоме")
-        self.save(self.ondrej)
+        self.save(self.ondrej, BIRT_date=None)
         self.assertEqual(self.ondrej.events.get(kind="BIRT").date, "")
 
     def test_save_without_changes_says_so(self):
-        r = self.client.get(self.url(self.marian))
-        form, events = r.context["form"], r.context["events_form"]
-        data = {k: v for k, v in {**form.initial, **{n: f.initial for n, f in events.fields.items()}}.items()
-                if v not in (None, False)}
-        r = self.client.post(self.url(self.marian), data, follow=True)
-        self.assertContains(r, "Изменений нет")
-        r = self.save(self.marian, given_name="Мариан", BIRT_date="06.01.2007", BIRT_place="", follow=True)
-        self.assertContains(r, "Изменения сохранены")
+        self.assertContains(self.save(self.marian, follow=True), "Изменений нет")
+        self.assertContains(self.save(self.marian, given_name="Мариан", follow=True), "Изменения сохранены")
+
+    def test_fetch_save_returns_fragments_without_redirect(self):
+        r = self.save(self.marian, fetch=True, given_name="Мариан")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["status"], "success")
+        self.assertIn("Изменения сохранены", data["about"])
+        self.assertIn("Мариан", data["header"])
+        r = self.save(self.marian, fetch=True)
+        self.assertIn("Изменений нет", r.json()["about"])
+
+    def test_other_events_and_names(self):
+        r = self.save(self.marian, **{
+            "events-TOTAL_FORMS": "1", "events-0-kind": "RESI", "events-0-date": "2010-2015",
+            "events-0-place_name": "Praha", "events-0-description": "с мамой",
+            "names-TOTAL_FORMS": "1", "names-0-kind": "translit", "names-0-given_name": "Мариан"})
+        self.assertRedirects(r, self.url(self.marian))
+        resi = self.marian.events.get(kind="RESI")
+        self.assertEqual((resi.date, resi.place.name, resi.description), ("BET 2010 AND 2015", "Praha", "с мамой"))
+        self.assertEqual(self.marian.names.get().given_name, "Мариан")
+        page = self.client.get(self.url(self.marian))
+        self.assertContains(page, 'value="между 2010 и 2015"')
+        self.assertContains(page, "Место жительства")             # и в хронологии
+        self.save(self.marian, **{"events-0-DELETE": "on", "names-0-DELETE": "on"})
+        self.assertFalse(self.marian.events.filter(kind="RESI").exists())
+        self.assertFalse(self.marian.names.exists())
+
+    def test_invalid_row_is_reported(self):
+        r = self.save(self.marian, fetch=True, **{"events-TOTAL_FORMS": "1", "events-0-date": "1990"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("Проверьте выделенные поля", r.json()["about"])
+        self.assertFalse(self.marian.events.exclude(kind="BIRT").exists())
 
     def test_living_flag_changes_years(self):
-        self.save(self.ondrej, BIRT_date="1986", is_living="on")
+        self.save(self.ondrej, is_living="on")
         self.assertEqual(self.client.get(f"/api/people/{self.ondrej.pk}/").json()["years"], "1986–")
-        self.save(self.ondrej, BIRT_date="1986")
+        self.save(self.ondrej, is_living=None)
         self.assertEqual(self.client.get(f"/api/people/{self.ondrej.pk}/").json()["years"], "1986–?")
 
     def test_top_ancestor_can_be_deleted(self):
@@ -284,6 +337,13 @@ class PersonPageTest(SmallTreeMixin, TestCase):
         self.assertRedirects(r, "/")
         self.assertFalse(Person.objects.filter(pk=self.uncle.pk).exists())
 
+    def test_fetch_delete(self):
+        url, fetch = self.url(self.uncle), {"X-Requested-With": "fetch"}
+        r = self.client.post(url, {"action": "delete", "confirm_code": "x"}, headers=fetch)
+        self.assertEqual((r.status_code, r.json()["status"]), (400, "error"))
+        r = self.client.post(url, {"action": "delete", "confirm_code": self.uncle.code}, headers=fetch)
+        self.assertEqual(r.json(), {"status": "deleted", "redirect": "/"})
+
     def test_blocked_person_cannot_be_deleted(self):
         r = self.client.post(self.url(self.libor), {"action": "delete", "confirm_code": self.libor.code})
         self.assertContains(r, "Удалить нельзя")
@@ -291,6 +351,68 @@ class PersonPageTest(SmallTreeMixin, TestCase):
 
     def test_tree_page_has_no_admin_button(self):
         self.assertNotContains(self.client.get("/"), "/admin/")
+
+
+class MaterialsTest(SmallTreeMixin, TestCase):
+    """«Добавить» в «Источниках» и «Воспоминаниях»: изображение + название + дата."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+        from django.test import override_settings
+        self.make_tree()
+        media = tempfile.mkdtemp()                     # файлы тестов — не в настоящий media/
+        self.addCleanup(shutil.rmtree, media, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=media)
+        override.enable()
+        self.addCleanup(override.disable)
+
+    def upload(self, person, category="memory", name="svadba.jpg", content=b"jpeg-bytes", **fields):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        data = {"category": category, "file": SimpleUploadedFile(name, content), **fields}
+        return self.client.post(f"/people/{person.code}/materials/", data, headers={"X-Requested-With": "fetch"})
+
+    def test_add_memory_with_title_and_date(self):
+        r = self.upload(self.marian, title="Свадьба Игнаца", date="12.05.1890")
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertEqual((data["tab"], data["count"]), ("memories", 1))
+        self.assertIn("Свадьба Игнаца", data["html"])
+        self.assertIn("12 мая 1890", data["html"])
+        source = Source.objects.get()
+        self.assertEqual((source.category, source.date, source.kind), ("memory", "12 MAY 1890", "photo"))
+        self.assertTrue(source.files.get().sha256)
+        page = self.client.get(f"/people/{self.marian.code}/")
+        self.assertEqual(len(page.context["memories"]), 1)
+        self.assertEqual(len(page.context["sources"]), 0)
+
+    def test_title_defaults_to_file_name(self):
+        self.upload(self.marian, category="source", name="Narozeni Anna 1890.png")
+        self.assertEqual(Source.objects.get().title, "Narozeni Anna 1890")
+
+    def test_same_file_is_stored_once_and_shared(self):
+        self.upload(self.marian, title="Семейное фото")
+        r = self.upload(self.ondrej, name="kopie.jpg")                    # тот же файл, другое имя
+        self.assertIn("уже есть", r.json()["html"])
+        self.assertEqual(Source.objects.count(), 1)
+        self.assertEqual(SourceFile.objects.count(), 1)
+        self.assertEqual(Source.objects.get().citations.count(), 2)
+        page = self.client.get(f"/people/{self.ondrej.code}/")
+        self.assertContains(page, "Также у:")
+        self.assertContains(page, self.marian.full_name)
+
+    def test_only_images_are_accepted(self):
+        r = self.upload(self.marian, name="dopis.pdf")
+        self.assertEqual((r.status_code, r.json()["status"]), (400, "error"))
+        r = self.client.post(f"/people/{self.marian.code}/materials/", {"category": "memory"},
+                             headers={"X-Requested-With": "fetch"})
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(Source.objects.exists())
+
+    def test_page_has_add_buttons_and_delete_block_at_bottom(self):
+        html = self.client.get(f"/people/{self.uncle.code}/").content.decode()
+        self.assertEqual(html.count("data-add-material"), 2)
+        self.assertGreater(html.index("danger-zone"), html.index("about-side"))
 
 
 @unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")

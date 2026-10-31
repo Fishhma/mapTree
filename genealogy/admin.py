@@ -128,8 +128,8 @@ class SourceCitationInline(admin.TabularInline):
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
     form = FriendlyDateForm
-    list_display = ("title", "kind", "date", "repository")
-    list_filter = ("kind",)
+    list_display = ("title", "category", "kind", "date", "repository")
+    list_filter = ("category", "kind")
     search_fields = ("title", "repository", "reference", "notes")
     inlines = [SourceFileInline, SourceCitationInline]
 

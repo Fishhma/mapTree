@@ -52,6 +52,10 @@ class Person(models.Model):
             super().save(update_fields=["code"])
 
     @property
+    def full_name(self) -> str:
+        return " ".join(x for x in (self.given_name, self.patronymic, self.birth_surname) if x) or "?"
+
+    @property
     def families(self):
         return Family.objects.filter(models.Q(partner1=self) | models.Q(partner2=self))
 
@@ -195,7 +199,15 @@ class PersonName(models.Model):
 
 
 class Source(models.Model):
-    """Документ или фотография. Один источник можно привязать к любому числу людей."""
+    """Материал: источник (документ) или воспоминание (фото, работа человека).
+
+    Хранится один раз и привязывается к любому числу людей через Citation —
+    например, одна семейная фотография у каждого, кто на ней есть.
+    """
+    class Category(models.TextChoices):
+        SOURCE = "source", "Источник"
+        MEMORY = "memory", "Воспоминание"
+
     class Kind(models.TextChoices):
         BIRTH = "birth", "Запись о рождении"
         BAPTISM = "baptism", "Запись о крещении"
@@ -206,9 +218,12 @@ class Source(models.Model):
         LETTER = "letter", "Письмо / личный документ"
         OTHER = "other", "Другое"
 
+    category = models.CharField("раздел", max_length=8, choices=Category.choices,
+                                default=Category.SOURCE)
     title = models.CharField("название", max_length=255)
     kind = models.CharField("тип", max_length=12, choices=Kind.choices, default=Kind.OTHER)
-    date = models.CharField("дата документа", max_length=60, blank=True)
+    date = models.CharField("дата события", max_length=60, blank=True)
+    created = models.DateTimeField("добавлен", auto_now_add=True, null=True)
     repository = models.CharField("где хранится", max_length=255, blank=True,
                                   help_text="Архив, книга, семейный альбом…")
     reference = models.CharField("шифр / ссылка", max_length=500, blank=True)
@@ -226,11 +241,21 @@ class Source(models.Model):
         self.date = normalize_date(self.date)
         super().save(*args, **kwargs)
 
+    @property
+    def date_display(self) -> str:
+        return FuzzyDate(self.date).display_ru() if self.date else ""
+
+    @property
+    def sort_key(self) -> int:
+        return FuzzyDate(self.date).sort_int if self.date else 99999999
+
 
 class SourceFile(models.Model):
     source = models.ForeignKey(Source, on_delete=models.CASCADE, related_name="files")
     file = models.FileField("файл", upload_to="sources/%Y/")
     caption = models.CharField("подпись", max_length=255, blank=True)
+    sha256 = models.CharField("отпечаток файла", max_length=64, blank=True, db_index=True, editable=False,
+                              help_text="По нему узнаётся повторная загрузка того же файла.")
 
     class Meta:
         verbose_name = "файл"

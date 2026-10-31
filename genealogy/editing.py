@@ -1,13 +1,16 @@
-"""Изменение данных: добавление родственников, правка и удаление человека.
+"""Изменение данных: добавление родственников, правка и удаление человека, материалы.
 
 «+» на карточке: ребёнок, супруг(а), родитель, родной брат или сестра — всегда НОВЫЙ человек
 (связывание с уже существующим — отдельный шаг). Все поля необязательны.
 Связи строятся только через семьи (союзы), как и везде в проекте.
 """
+import hashlib
+from pathlib import Path
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .models import Event, Family, Person, Place
+from .models import Citation, Event, Family, Person, Place, Source, SourceFile
 
 RELATIONS = ("child", "spouse", "parent", "sibling")
 
@@ -21,7 +24,7 @@ def _text(data: dict, key: str) -> str:
     return " ".join(str(value).split())
 
 
-def _find_or_create_place(name: str) -> Place | None:
+def find_or_create_place(name: str) -> Place | None:
     if not name:
         return None
     return Place.objects.filter(name__iexact=name).first() or Place.objects.create(name=name)
@@ -37,7 +40,7 @@ def _create_person(data: dict) -> Person:
     date, place = _text(data, "birth_date"), _text(data, "birth_place")
     if date or place:
         Event.objects.create(person=person, kind=Event.Kind.BIRTH, date=date,
-                             place=_find_or_create_place(place))
+                             place=find_or_create_place(place))
     return person
 
 
@@ -102,13 +105,13 @@ def save_key_events(person: Person, events: dict[str, Event], data: dict) -> Non
         if event is None:
             if date or place:
                 Event.objects.create(person=person, kind=kind, date=date,
-                                     place=_find_or_create_place(place))
+                                     place=find_or_create_place(place))
             continue
         if not date and not place and not event.value and not event.description \
                 and not event.citations.exists():
             event.delete()
             continue
-        event.date, event.place = date, _find_or_create_place(place)
+        event.date, event.place = date, find_or_create_place(place)
         event.save()
 
 
@@ -132,6 +135,45 @@ def delete_person(person: Person, typed_code: str) -> None:
     if typed_code.strip().upper() != person.code:
         raise EditError(f"Номер не совпадает. Чтобы удалить, введите {person.code}.")
     person.delete()
+
+
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "tif", "tiff", "bmp"}
+
+
+def file_sha256(upload) -> str:
+    digest = hashlib.sha256()
+    for chunk in upload.chunks():
+        digest.update(chunk)
+    upload.seek(0)
+    return digest.hexdigest()
+
+
+@transaction.atomic
+def add_material(person: Person, category: str, upload, title: str = "", date: str = "") -> tuple[Source, bool]:
+    """Источник или воспоминание: изображение + название + дата события.
+
+    Один и тот же файл хранится один раз: если он уже загружен в этот раздел,
+    существующий материал просто привязывается к человеку. Возвращает (материал, был_ли_уже).
+    """
+    if category not in Source.Category.values:
+        raise EditError("Неизвестный раздел.")
+    if upload is None:
+        raise EditError("Выберите изображение.")
+    if Path(upload.name).suffix.lower().lstrip(".") not in IMAGE_EXTENSIONS:
+        raise EditError("Можно загрузить только изображение: JPG, PNG, GIF, WEBP, TIFF или BMP.")
+    digest = file_sha256(upload)
+    same = SourceFile.objects.select_related("source").filter(sha256=digest, source__category=category).first()
+    if same:
+        source, existed = same.source, True
+    else:
+        source = Source.objects.create(
+            category=category, title=" ".join(title.split()) or Path(upload.name).stem,
+            kind=Source.Kind.PHOTO if category == Source.Category.MEMORY else Source.Kind.OTHER,
+            date=" ".join(date.split()))
+        SourceFile.objects.create(source=source, file=upload, sha256=digest)
+        existed = False
+    Citation.objects.get_or_create(source=source, person=person, event=None)
+    return source, existed
 
 
 def error_text(exc: Exception) -> str:

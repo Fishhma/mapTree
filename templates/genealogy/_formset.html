@@ -1,0 +1,10 @@
+{# Список строк (события, варианты имени): строки добавляются кнопкой, удаляются галочкой. #}
+<div class="rows" data-formset="{{ formset.prefix }}">
+  {{ formset.management_form }}
+  {{ formset.non_form_errors }}
+  <div class="rows-list">
+    {% for f in formset %}{% include "genealogy/_formset_row.html" %}{% empty %}<p class="empty rows-empty">{{ empty_text }}</p>{% endfor %}
+  </div>
+  <template>{% with f=formset.empty_form %}{% include "genealogy/_formset_row.html" %}{% endwith %}</template>
+  <button type="button" class="add-row" data-add-row>+ {{ add_text }}</button>
+</div>

@@ -3,126 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ person.given_name|default:"?" }} {{ person.birth_surname }} · {{ person.code }}</title>
+  <title>{{ person.full_name }} · {{ person.code }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&display=swap">
   <link rel="stylesheet" href="{% static 'genealogy/person.css' %}">
 </head>
 <body>
+<header class="masthead">
+  <div class="masthead-inner">
+    <nav class="top"><a href="{% url 'tree' %}#{{ person.code }}">← К древу</a></nav>
+    <div id="person-header">{% include "genealogy/_person_header.html" %}</div>
+    {# Вкладки — ссылки на #адрес: «Назад» в браузере возвращает на предыдущую вкладку, а с первой — к древу. #}
+    <nav class="tabs" role="tablist" aria-label="Разделы карточки">
+      <a href="#about" role="tab" data-tab="about">О человеке</a>
+      <a href="#sources" role="tab" data-tab="sources">Источники (<span data-count="sources">{{ sources|length }}</span>)</a>
+      <a href="#memories" role="tab" data-tab="memories">Воспоминания (<span data-count="memories">{{ memories|length }}</span>)</a>
+    </nav>
+  </div>
+</header>
+
 <main class="page">
-  <nav class="top">
-    <a href="{% url 'tree' %}#{{ person.code }}">← К древу</a>
-  </nav>
-
-  <header class="head">
-    <span class="sex {{ person.sex }}"></span>
-    <div>
-      <h1>{{ person.given_name|default:"?" }}
-        {% if person.patronymic %}<span class="patr">{{ person.patronymic }}</span>{% endif %}
-        {% if person.birth_surname %}{{ person.birth_surname }}{% endif %}</h1>
-      <p class="meta">{{ person.code }} · {{ person.get_sex_display }}</p>
-    </div>
-  </header>
-
-  {% for m in messages %}<p class="notice">{{ m }}</p>{% endfor %}
-
-  <form method="post" class="edit" novalidate>
-    {% csrf_token %}
-    {% if form.errors or events_form.errors %}
-      <p class="error">Проверьте выделенные поля.</p>
-    {% endif %}
-
-    <section>
-      <h2>Основное</h2>
-      <div class="grid">
-        {% for field in form %}{% if field.name != "notes" %}
-          <label class="field">
-            <span>{{ field.label|capfirst }}</span>
-            {{ field }}
-            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-            {{ field.errors }}
-          </label>
-        {% endif %}{% endfor %}
-      </div>
-    </section>
-
-    <section>
-      <h2>Ключевые сведения</h2>
-      <p class="hint top">Даты можно писать так: {{ date_hint }}</p>
-      <div class="events">
-        {% for label, date, place in events_form.rows %}
-          <span class="ev-label">{{ label }}</span>
-          <label class="field"><span>Дата</span>{{ date }}{{ date.errors }}</label>
-          <label class="field"><span>Место</span>{{ place }}{{ place.errors }}</label>
-        {% endfor %}
-      </div>
-      <datalist id="places">{% for name in places %}<option value="{{ name }}">{% endfor %}</datalist>
-    </section>
-
-    <section>
-      <h2>Жизнеописание</h2>
-      <label class="field wide">{{ form.notes }}{{ form.notes.errors }}</label>
-    </section>
-
-    <p class="hint">Все поля необязательны.</p>
-    <div class="actions">
-      <button type="submit" class="primary">Сохранить</button>
-      <a href="{% url 'tree' %}#{{ person.code }}">Отмена</a>
-    </div>
-  </form>
-
-  <section>
-    <h2>Семья</h2>
-    <h3>Родители</h3>
-    {% if parents %}
-      <ul class="people">{% for p in parents %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
-    {% else %}<p class="empty">Не указаны</p>{% endif %}
-
-    <h3>{% if families|length > 1 %}Браки и дети{% else %}Супруг(а) и дети{% endif %}</h3>
-    {% for fam in families %}
-      <div class="union">
-        <ul class="people">
-          {% if fam.spouse %}{% with p=fam.spouse %}{% include "genealogy/_person_link.html" %}{% endwith %}
-          {% else %}<li class="empty">Партнёр неизвестен</li>{% endif %}
-        </ul>
-        {% if fam.children %}
-          <ul class="people kids">{% for p in fam.children %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
-        {% endif %}
-      </div>
-    {% empty %}<p class="empty">Нет</p>{% endfor %}
-
-    {% if siblings %}
-      <h3>Братья и сёстры</h3>
-      <ul class="people">{% for p in siblings %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
-    {% endif %}
-  </section>
-
-  <section class="danger-zone">
-    <h2>Удаление</h2>
-    {% if blockers %}
-      <p>Удалить нельзя:</p>
-      <ul>{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
-    {% else %}
-      <details {% if delete_error %}open{% endif %}>
-        <summary>Удалить человека…</summary>
-        <p>Будет удалён <strong>{{ person }}</strong> — безвозвратно.</p>
-        {% if summary %}
-          <p>Вместе с ним:</p>
-          <ul>{% for s in summary %}<li>{{ s }}</li>{% endfor %}</ul>
-        {% endif %}
-        <form method="post" class="confirm">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="delete">
-          <label class="field">
-            <span>Для подтверждения введите номер человека: <strong>{{ person.code }}</strong></span>
-            <input name="confirm_code" autocomplete="off" required {% if delete_error %}autofocus{% endif %}>
-          </label>
-          {% if delete_error %}<p class="error">{{ delete_error }}</p>{% endif %}
-          <button type="submit" class="danger">Удалить навсегда</button>
-        </form>
-      </details>
-    {% endif %}
-  </section>
+  <div data-pane="about" role="tabpanel" id="pane-about">{% include "genealogy/_person_about.html" %}</div>
+  <div data-pane="sources" role="tabpanel" id="pane-sources" hidden>{% include "genealogy/_person_sources.html" %}</div>
+  <div data-pane="memories" role="tabpanel" id="pane-memories" hidden>{% include "genealogy/_person_memories.html" %}</div>
 </main>
+<script src="{% static 'genealogy/person.js' %}"></script>
 </body>
 </html>

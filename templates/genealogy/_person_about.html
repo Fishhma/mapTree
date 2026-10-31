@@ -1,0 +1,132 @@
+{% if notice %}<p class="notice {{ notice_kind }}" role="status" tabindex="-1">{{ notice }}</p>{% endif %}
+{% for m in messages %}<p class="notice {{ m.tags }}" role="status">{{ m }}</p>{% endfor %}
+
+<div class="about">
+  <div class="about-main">
+    <form method="post" class="edit" novalidate>
+      {% csrf_token %}
+      <section class="card">
+        <h2>Основное</h2>
+        <div class="grid">
+          {% for field in form %}{% if field.name != "notes" and field.name != "is_living" %}
+            <label class="field">
+              <span>{{ field.label|capfirst }}</span>
+              {{ field }}
+              {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+              {{ field.errors }}
+            </label>
+          {% endif %}{% endfor %}
+          <label class="check">{{ form.is_living }} Жив(а)</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Ключевые сведения</h2>
+        <p class="hint top">Даты можно писать так: {{ date_hint }}</p>
+        <div class="events">
+          {% for label, date, place in events_form.rows %}
+            <span class="ev-label">{{ label }}</span>
+            <label class="field"><span>Дата</span>{{ date }}{{ date.errors }}</label>
+            <label class="field"><span>Место</span>{{ place }}{{ place.errors }}</label>
+          {% endfor %}
+        </div>
+        <datalist id="places">{% for name in places %}<option value="{{ name }}">{% endfor %}</datalist>
+      </section>
+
+      <section class="card">
+        <details class="more" {% if other_events.total_error_count or names.total_error_count %}open{% endif %}>
+          <summary><h2>Другие сведения</h2>
+            <span class="more-count">События и факты: {{ other_events.initial_form_count }} · Варианты имени: {{ names.initial_form_count }}</span></summary>
+          <h3>События и факты</h3>
+          <p class="hint top">Переезды, учёба, служба, профессия, вероисповедание… Для «Другое» укажите название.</p>
+          {% with formset=other_events add_text="Добавить событие или факт" empty_text="Пока нет" %}{% include "genealogy/_formset.html" %}{% endwith %}
+          <h3>Варианты имени</h3>
+          <p class="hint top">Фамилия в браке, после развода, другое написание.</p>
+          {% with formset=names add_text="Добавить вариант имени" empty_text="Пока нет" %}{% include "genealogy/_formset.html" %}{% endwith %}
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Жизнеописание</h2>
+        <label class="field wide">{{ form.notes }}{{ form.notes.errors }}</label>
+      </section>
+
+      <div class="actions">
+        <button type="submit" class="primary">Сохранить</button>
+        <span class="hint">Все поля необязательны.</span>
+      </div>
+    </form>
+
+  </div>
+
+  <aside class="about-side">
+    <section class="card">
+      <h2>События</h2>
+      {% if timeline %}
+        <ol class="timeline">
+          {% for t in timeline %}
+            <li>
+              <span class="t-date">{{ t.date|default:"дата неизвестна" }}</span>
+              <span class="t-title">{{ t.title }}{% if t.note %}: {{ t.note }}{% endif %}</span>
+              {% if t.person %}<a class="t-person" href="{% url 'person-page' t.person.code %}">{{ t.person.full_name }}</a>{% endif %}
+              {% if t.place %}<span class="t-place">{{ t.place }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}<p class="empty">Пока нет</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Семья</h2>
+      <h3>Родители</h3>
+      {% if parents %}
+        <ul class="people">{% for p in parents %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
+      {% else %}<p class="empty">Не указаны</p>{% endif %}
+
+      <h3>{% if families|length > 1 %}Браки и дети{% else %}Супруг(а) и дети{% endif %}</h3>
+      {% for fam in families %}
+        <div class="union">
+          <ul class="people">
+            {% if fam.spouse %}{% with p=fam.spouse %}{% include "genealogy/_person_link.html" %}{% endwith %}
+            {% else %}<li class="empty">Партнёр неизвестен</li>{% endif %}
+          </ul>
+          {% if fam.children %}
+            <ul class="people kids">{% for p in fam.children %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
+          {% endif %}
+        </div>
+      {% empty %}<p class="empty">Нет</p>{% endfor %}
+
+      {% if siblings %}
+        <h3>Братья и сёстры</h3>
+        <ul class="people">{% for p in siblings %}{% include "genealogy/_person_link.html" %}{% endfor %}</ul>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+
+<section class="card danger-zone">
+  <h2>Удаление</h2>
+  {% if blockers %}
+    <p>Удалить нельзя:</p>
+    <ul>{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+  {% else %}
+    <details {% if delete_error %}open{% endif %}>
+      <summary>Удалить человека…</summary>
+      <p>Будет удалён <strong>{{ person }}</strong> — безвозвратно.</p>
+      {% if summary %}
+        <p>Вместе с ним:</p>
+        <ul>{% for s in summary %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% endif %}
+      <form method="post" class="confirm">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <label class="field">
+          <span>Для подтверждения введите номер человека: <strong>{{ person.code }}</strong></span>
+          <input name="confirm_code" autocomplete="off" required {% if delete_error %}autofocus{% endif %}>
+        </label>
+        <p class="error" role="alert" {% if not delete_error %}hidden{% endif %}>{{ delete_error }}</p>
+        <button type="submit" class="danger">Удалить навсегда</button>
+      </form>
+    </details>
+  {% endif %}
+</section>

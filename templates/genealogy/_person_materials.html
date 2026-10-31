@@ -1,0 +1,56 @@
+{# Вкладка «Источники» или «Воспоминания»: кнопка «Добавить», карточки материалов и окно загрузки. #}
+{% if notice %}<p class="notice success" role="status" tabindex="-1">{{ notice }}</p>{% endif %}
+<section class="card">
+  <div class="materials-head">
+    <h2>{{ heading }}</h2>
+    <button type="button" class="primary" data-add-material>Добавить</button>
+  </div>
+  <p class="hint top">{{ hint }}</p>
+
+  {% if items %}
+    <ul class="materials">
+      {% for m in items %}
+        <li class="material">
+          {% if m.image %}
+            <a class="material-img" href="{{ m.image.file.url }}" target="_blank" rel="noopener">
+              <img src="{{ m.image.file.url }}" alt="{{ m.source.title }}" loading="lazy"></a>
+          {% else %}
+            <div class="material-img empty-img" aria-hidden="true">нет изображения</div>
+          {% endif %}
+          <div class="material-text">
+            <strong>{{ m.source.title }}</strong>
+            {% if m.source.date_display %}<span class="material-date">{{ m.source.date_display }}</span>{% endif %}
+            {% if m.others %}
+              <span class="material-people">Также у:
+                {% for p in m.others %}<a href="{% url 'person-page' p.code %}#{{ tab }}">{{ p.full_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+              </span>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">Пока нет</p>
+  {% endif %}
+</section>
+
+<dialog class="add-material" aria-labelledby="add-{{ category }}-title">
+  <form method="post" action="{% url 'person-add-material' person.code %}" enctype="multipart/form-data" class="material-form">
+    {% csrf_token %}
+    <input type="hidden" name="category" value="{{ category }}">
+    <h2 id="add-{{ category }}-title">{{ add_title }}</h2>
+    <label class="field">
+      <span>Изображение</span>
+      <input type="file" name="file" accept="image/*" required>
+    </label>
+    <img class="preview" alt="" hidden>
+    <label class="field"><span>Название</span><input name="title" autocomplete="off" maxlength="255"></label>
+    <label class="field"><span>Дата события</span><input name="date" autocomplete="off" maxlength="60"></label>
+    <p class="hint">Даты можно писать так: {{ date_hint }}</p>
+    <p class="error" role="alert" hidden></p>
+    <div class="actions">
+      <button type="submit" class="primary">Сохранить</button>
+      <button type="button" data-close-dialog>Отмена</button>
+    </div>
+  </form>
+</dialog>
