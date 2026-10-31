@@ -1,15 +1,22 @@
+import json
+
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
 
 from tree_engine.layout import compute_layout
 from tree_engine.model import FuzzyDate
 from tree_engine.render_svg import render as render_svg
 
 from .bridge import build_tree, root_id, tree_payload
+from .editing import EditError, add_relative, error_text
 from .models import Event, Person
 
 
+@ensure_csrf_cookie          # браузеру нужен CSRF-токен для добавления людей
 def tree_page(request):
     return render(request, "genealogy/tree.html")
 
@@ -103,3 +110,20 @@ def person_api(request, pk):
         "delete_url": reverse("admin:genealogy_person_delete", args=[person.pk]),
     })
     return JsonResponse(data)
+
+
+@require_POST
+def add_relative_api(request, pk):
+    """«+» на карточке: создать нового родственника. Тело — JSON с полями формы."""
+    person = get_object_or_404(Person, pk=pk)
+    try:
+        body = json.loads(request.body or b"{}")
+    except ValueError:
+        return JsonResponse({"error": "Неверный запрос."}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({"error": "Неверный запрос."}, status=400)
+    try:
+        new = add_relative(person, body.get("relation"), body, body.get("family"))
+    except (EditError, ValidationError) as exc:
+        return JsonResponse({"error": error_text(exc)}, status=400)
+    return JsonResponse({"id": str(new.pk), "code": new.code}, status=201)

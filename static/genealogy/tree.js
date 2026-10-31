@@ -1,5 +1,5 @@
 // Страница древа: рисует готовую раскладку с сервера, перемещение/масштаб,
-// поиск, выделение связей и панель с карточкой человека.
+// поиск, выделение связей, панель с карточкой человека и «+» для добавления родственников.
 // Вся геометрия считается на сервере (tree_engine), здесь только отрисовка.
 
 const NS = "http://www.w3.org/2000/svg";
@@ -9,6 +9,7 @@ const world = $("world");
 const ruler = $("ruler");
 const panel = $("panel");
 const panelBody = $("panel-body");
+const addMenu = $("add-menu");
 
 let data = null;
 let view = { x: 0, y: 0, k: 1 };
@@ -97,6 +98,12 @@ function draw() {
       const t = el("text", { x: b.x, y: b.y + H - 9, "text-anchor": "middle", class: "years" }, g);
       t.textContent = p.years;
     }
+    // «+» в правом верхнем углу: добавить родственника. На печать (tree.svg) не попадает.
+    const plus = el("g", { class: "card-plus", tabindex: "0", role: "button",
+      "aria-label": `Добавить родственника: ${fullName(p)}`, "aria-haspopup": "menu" }, g);
+    const cx = left + W, cy = b.y;
+    el("circle", { cx, cy, r: 9 }, plus);
+    el("path", { d: `M ${cx - 4} ${cy} H ${cx + 4} M ${cx} ${cy - 4} V ${cy + 4}` }, plus);
     cards.set(b.id, g);
   }
   $("stats").textContent = `${data.boxes.length} чел. · ${data.rows.length} поколений`;
@@ -153,6 +160,7 @@ function centerOn(id, k = Math.max(view.k, 0.9)) {
 
 let drag = null;
 svg.addEventListener("pointerdown", (e) => {
+  closeAddMenu();
   drag = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
   svg.setPointerCapture(e.pointerId);
 });
@@ -171,19 +179,30 @@ svg.addEventListener("pointerup", (e) => {
   drag = null;
   svg.classList.remove("dragging");
   if (!wasClick) return;
-  const card = document.elementFromPoint(e.clientX, e.clientY)?.closest(".card");
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  const plus = target?.closest(".card-plus");
+  if (plus) { openAddMenu(plus.closest(".card").dataset.id, plus); return; }
+  const card = target?.closest(".card");
   if (card) select(card.dataset.id);
 });
 svg.addEventListener("wheel", (e) => {
   e.preventDefault();
+  closeAddMenu();
   zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
 }, { passive: false });
 svg.addEventListener("keydown", (e) => {
+  const plus = e.target.closest?.(".card-plus");
+  if (plus && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    openAddMenu(plus.closest(".card").dataset.id, plus);
+    return;
+  }
   const card = e.target.closest?.(".card");
   if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); select(card.dataset.id); }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.target.matches("input")) return;
+  if (e.key === "Escape" && !addMenu.hidden) { closeAddMenu({ focusBack: true }); return; }
+  if (e.target.matches("input, select, textarea")) return;
   if (e.key === "+" || e.key === "=") zoomAt(1.25, visibleWidth() / 2, innerHeight / 2);
   if (e.key === "-") zoomAt(0.8, visibleWidth() / 2, innerHeight / 2);
   if (e.key === "0") fitAll();
@@ -307,6 +326,137 @@ function renderPanel(p) {
   panelBody.replaceChildren(...nodes.flat().filter(Boolean));
 }
 
+// ---------- «+»: добавление родственника ----------
+const RELATIONS = {
+  child: { menu: "Добавить ребёнка", title: "Новый ребёнок" },
+  spouse: { menu: "Добавить супруга(у)", title: "Новый супруг(а)" },
+  parent: { menu: "Добавить родителя", title: "Новый родитель" },
+  sibling: { menu: "Добавить родного брата или сестру", title: "Новый брат или сестра" },
+};
+const UNKNOWN_PARTNER = "Второй родитель неизвестен";
+let menuAnchor = null;
+
+const parentsOf = (id) => {
+  const fam = data.families[data.people[id].parent_family];
+  return fam ? fam.partners : [];
+};
+
+function openAddMenu(id, anchor) {
+  const items = Object.entries(RELATIONS)
+    .filter(([rel]) => rel !== "parent" || parentsOf(id).length < 2)
+    .map(([rel, r]) => h("button", { type: "button", role: "menuitem",
+      onclick: () => { closeAddMenu(); showAddForm(id, rel); } }, r.menu));
+  addMenu.replaceChildren(...items);
+  addMenu.hidden = false;
+  menuAnchor = anchor;
+  const a = anchor.getBoundingClientRect();
+  const m = addMenu.getBoundingClientRect();
+  const left = Math.min(a.right + 6, innerWidth - m.width - 8);
+  const top = Math.min(a.top, innerHeight - m.height - 8);
+  addMenu.style.left = `${Math.max(8, left)}px`;
+  addMenu.style.top = `${Math.max(8, top)}px`;
+  items[0].focus();
+}
+
+function closeAddMenu({ focusBack = false } = {}) {
+  if (addMenu.hidden) return;
+  addMenu.hidden = true;
+  if (focusBack) menuAnchor?.focus();
+  menuAnchor = null;
+}
+
+addMenu.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const items = [...addMenu.querySelectorAll("button")];
+  const i = items.indexOf(document.activeElement);
+  items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+});
+document.addEventListener("pointerdown", (e) => {
+  if (!addMenu.contains(e.target) && !svg.contains(e.target)) closeAddMenu();
+});
+
+function field(label, input) {
+  return h("label", { class: "f-field" }, h("span", {}, label), input);
+}
+
+// Варианты «второго родителя» для ребёнка: каждый союз человека + союз с неизвестным партнёром.
+function unionChoices(id) {
+  const choices = data.people[id].families.map((fid) => {
+    const other = data.families[fid].partners.find((pid) => pid !== id);
+    return { value: fid, label: other ? fullName(data.people[other]) : UNKNOWN_PARTNER };
+  });
+  if (!choices.some((c) => c.label === UNKNOWN_PARTNER)) choices.push({ value: "", label: UNKNOWN_PARTNER });
+  return choices;
+}
+
+function showAddForm(id, relation) {
+  selected = id;
+  highlight(id);
+  openPanel();
+  const person = data.people[id];
+  const places = [...new Set(Object.values(data.people).map((p) => p.birth_place).filter(Boolean))].sort();
+  const error = h("p", { class: "f-error", role: "alert", hidden: true });
+  const save = h("button", { type: "submit", class: "primary" }, "Сохранить");
+
+  const unions = relation === "child"
+    ? h("fieldset", { class: "f-unions" }, h("legend", {}, "Второй родитель"),
+      unionChoices(id).map((c, i) => h("label", {},
+        h("input", { type: "radio", name: "family", value: c.value, checked: i === 0 }), " ", c.label)))
+    : null;
+
+  const form = h("form", { class: "add-form", novalidate: true },
+    unions,
+    field("Имя", h("input", { name: "given_name", autocomplete: "off" })),
+    field("Отчество", h("input", { name: "patronymic", autocomplete: "off" })),
+    field("Фамилия при рождении", h("input", { name: "birth_surname", autocomplete: "off" })),
+    field("Пол", h("select", { name: "sex" },
+      h("option", { value: "U" }, "Неизвестен"), h("option", { value: "M" }, "Мужской"),
+      h("option", { value: "F" }, "Женский"))),
+    field("Дата рождения", h("input", { name: "birth_date", autocomplete: "off",
+      placeholder: "10.08.1962 · около 1850 · 1850-1860" })),
+    field("Место рождения", h("input", { name: "birth_place", autocomplete: "off", list: "places" })),
+    h("datalist", { id: "places" }, places.map((pl) => h("option", { value: pl }))),
+    h("p", { class: "f-hint" }, "Все поля необязательны."),
+    error,
+    h("div", { class: "p-actions" }, save,
+      h("button", { type: "button", onclick: () => select(id, { center: false }) }, "Отмена")));
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(form));
+    body.relation = relation;
+    save.disabled = true;
+    error.hidden = true;
+    try {
+      const res = await fetch(`/api/people/${id}/add/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+        body: JSON.stringify(body),
+      });
+      const answer = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(answer.error || "Не удалось сохранить.");
+      await loadTree();
+      select(answer.id);
+    } catch (err) {
+      error.textContent = err instanceof TypeError ? "Сервер не отвечает." : err.message;
+      error.hidden = false;
+      save.disabled = false;
+    }
+  });
+
+  panelBody.replaceChildren(
+    h("div", { class: "p-head" }, h("span", { class: "p-sex" }),
+      h("div", {}, h("h2", { class: "p-name" }, RELATIONS[relation].title),
+        h("p", { class: "p-meta" }, `для: ${fullName(person)}`))),
+    form);
+  form.querySelector("input[name=given_name]").focus();
+}
+
+function csrfToken() {
+  return document.cookie.split("; ").find((c) => c.startsWith("csrftoken="))?.split("=")[1] ?? "";
+}
+
 // ---------- поиск ----------
 const searchInput = $("search");
 const results = $("search-results");
@@ -359,10 +509,16 @@ searchInput.addEventListener("keydown", (e) => {
 });
 
 // ---------- запуск ----------
+async function loadTree() {
+  const res = await fetch("/api/tree/");
+  if (!res.ok) throw new Error(res.status);
+  data = await res.json();
+  draw();
+}
+
 async function init() {
   try {
-    const res = await fetch("/api/tree/");
-    data = await res.json();
+    await loadTree();
   } catch {
     showMessage("Не удалось загрузить древо. Проверьте, что сервер запущен.");
     return;
@@ -372,7 +528,6 @@ async function init() {
     m.append(h("code", {}, "python manage.py import_gedcom файл.ged --root @I1@"));
     return;
   }
-  draw();
   const fromHash = Object.entries(data.people).find(([, p]) => "#" + p.code === location.hash);
   if (fromHash) {
     openPanel();

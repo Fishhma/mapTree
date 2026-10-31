@@ -1,0 +1,94 @@
+"""Добавление родственников прямо с древа: «+» на карточке.
+
+Ребёнок, супруг(а), родитель, родной брат или сестра — всегда НОВЫЙ человек
+(связывание с уже существующим — отдельный шаг). Все поля необязательны.
+Связи строятся только через семьи (союзы), как и везде в проекте.
+"""
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from .models import Event, Family, Person, Place
+
+RELATIONS = ("child", "spouse", "parent", "sibling")
+
+
+class EditError(ValueError):
+    """Понятная пользователю причина, почему действие невозможно."""
+
+
+def _text(data: dict, key: str) -> str:
+    value = data.get(key) or ""
+    return " ".join(str(value).split())
+
+
+def _find_or_create_place(name: str) -> Place | None:
+    if not name:
+        return None
+    return Place.objects.filter(name__iexact=name).first() or Place.objects.create(name=name)
+
+
+def _create_person(data: dict) -> Person:
+    sex = data.get("sex") if data.get("sex") in Person.Sex.values else Person.Sex.UNKNOWN
+    person = Person(given_name=_text(data, "given_name"), patronymic=_text(data, "patronymic"),
+                    birth_surname=_text(data, "birth_surname"), sex=sex)
+    person.full_clean(exclude=["code", "parent_family"])
+    person.save()
+    date, place = _text(data, "birth_date"), _text(data, "birth_place")
+    if date or place:
+        Event.objects.create(person=person, kind=Event.Kind.BIRTH, date=date,
+                             place=_find_or_create_place(place))
+    return person
+
+
+@transaction.atomic
+def add_relative(person: Person, relation: str, data: dict, family_id=None) -> Person:
+    """Создать нового родственника для `person` и связать его через семью.
+
+    child   — в семью `family_id` (союз этого человека) или в новую семью,
+              где второй родитель неизвестен;
+    spouse  — новая семья (повторный брак — просто ещё одна семья);
+    parent  — на свободное место в семье родителей (создаётся, если её нет);
+    sibling — в семью родителей (если родители неизвестны — семья без партнёров).
+    """
+    if relation not in RELATIONS:
+        raise EditError("Неизвестный вид родства.")
+    parents = person.parent_family
+    if relation == "parent" and parents and parents.partner1_id and parents.partner2_id:
+        raise EditError("У человека уже указаны оба родителя.")
+    family = None
+    if relation == "child" and family_id:
+        family = person.families.filter(pk=family_id).first()
+        if family is None:
+            raise EditError("Этот союз не относится к выбранному человеку.")
+
+    new = _create_person(data)
+
+    if relation == "child":
+        new.parent_family = family or Family.objects.create(partner1=person)
+        new.save(update_fields=["parent_family"])
+    elif relation == "spouse":
+        Family.objects.create(partner1=person, partner2=new)
+    elif relation == "parent":
+        if parents is None:
+            person.parent_family = Family.objects.create(partner1=new)
+            person.save(update_fields=["parent_family"])
+        elif not parents.partner1_id:
+            parents.partner1 = new
+            parents.save(update_fields=["partner1"])
+        else:
+            parents.partner2 = new
+            parents.save(update_fields=["partner2"])
+    else:  # sibling
+        if parents is None:
+            parents = Family.objects.create()
+            person.parent_family = parents
+            person.save(update_fields=["parent_family"])
+        new.parent_family = parents
+        new.save(update_fields=["parent_family"])
+    return new
+
+
+def error_text(exc: Exception) -> str:
+    if isinstance(exc, ValidationError):
+        return " ".join(exc.messages)
+    return str(exc)

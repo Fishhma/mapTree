@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.test import TestCase
 
-from .models import Event, Family, Person, TreeSettings
+from .models import Event, Family, Person, Place, TreeSettings
 
 GED = Path(__file__).resolve().parent.parent / "tests" / "rootsmagic_tree.ged"
 
@@ -131,6 +131,80 @@ class ApiTest(SmallTreeMixin, TestCase):
 
     def test_page(self):
         self.assertContains(self.client.get("/"), "Найти человека")
+
+
+class AddRelativeTest(SmallTreeMixin, TestCase):
+    """«+» на карточке: POST /api/people/<pk>/add/."""
+
+    def setUp(self):
+        self.make_tree()
+
+    def add(self, person, relation, **fields):
+        return self.client.post(f"/api/people/{person.pk}/add/", {"relation": relation, **fields},
+                                content_type="application/json")
+
+    def new_person(self, response):
+        self.assertEqual(response.status_code, 201, response.content)
+        return Person.objects.get(pk=response.json()["id"])
+
+    def test_child_into_chosen_marriage(self):
+        second = Family.objects.get(partner1=self.libor, partner2=self.julia)
+        kid = self.new_person(self.add(self.libor, "child", family=second.pk, given_name="Сводная",
+                                       sex="F", birth_date="01.02.2010", birth_place="Brno"))
+        self.assertEqual(kid.parent_family, second)
+        self.assertRegex(kid.code, r"^P\d{4}$")
+        birth = kid.events.get(kind="BIRT")
+        self.assertEqual((birth.date, birth.place.name), ("1 FEB 2010", "Brno"))
+        self.assertEqual(self.add(self.uncle, "child", birth_place="brno").status_code, 201)
+        self.assertEqual(Place.objects.count(), 1)                 # место не задвоилось
+
+    def test_child_without_family_gets_union_with_unknown_partner(self):
+        kid = self.new_person(self.add(self.marian, "child"))
+        fam = kid.parent_family
+        self.assertEqual((fam.partner1, fam.partner2), (self.marian, None))
+
+    def test_child_of_foreign_family_is_refused(self):
+        foreign = Family.objects.get(partner1=self.ded)
+        count = Person.objects.count()
+        r = self.add(self.marian, "child", family=foreign.pk)
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Person.objects.count(), count)            # ничего не создано
+
+    def test_spouse_is_a_new_family(self):
+        wife = self.new_person(self.add(self.libor, "spouse", given_name="Третья", sex="F"))
+        self.assertEqual(self.libor.families.count(), 3)
+        self.assertTrue(wife.families.filter(partner1=self.libor).exists())
+
+    def test_parent_fills_free_slot_then_refuses(self):
+        babka = self.new_person(self.add(self.libor, "parent", given_name="Бабка", sex="F"))
+        fam = Person.objects.get(pk=self.libor.pk).parent_family
+        self.assertEqual({fam.partner1, fam.partner2}, {self.ded, babka})
+        self.assertEqual(self.uncle.parent_family_id, fam.pk)      # общая мать у братьев
+        self.assertEqual(self.add(self.libor, "parent").status_code, 400)
+
+    def test_parent_of_person_without_parents(self):
+        father = self.new_person(self.add(self.ded, "parent", sex="M"))
+        self.assertEqual(Person.objects.get(pk=self.ded.pk).parent_family.partner1, father)
+
+    def test_sibling(self):
+        sister = self.new_person(self.add(self.marian, "sibling", sex="F"))
+        self.assertEqual(sister.parent_family_id, self.marian.parent_family_id)
+        lone = self.new_person(self.add(self.ded, "sibling"))      # родители деда неизвестны
+        fam = Person.objects.get(pk=self.ded.pk).parent_family
+        self.assertEqual((fam.partners, lone.parent_family), ([], fam))
+        self.assertEqual(len(self.client.get("/api/tree/").json()["boxes"]), 9)
+
+    def test_bad_requests(self):
+        self.assertEqual(self.add(self.marian, "cousin").status_code, 400)
+        self.assertEqual(self.client.get(f"/api/people/{self.marian.pk}/add/").status_code, 405)
+        r = self.client.post(f"/api/people/{self.marian.pk}/add/", "не json", content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+
+    def test_csrf_is_required(self):
+        from django.test import Client
+        r = Client(enforce_csrf_checks=True).post(f"/api/people/{self.marian.pk}/add/", {"relation": "child"},
+                                                 content_type="application/json")
+        self.assertEqual(r.status_code, 403)
 
 
 @unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")

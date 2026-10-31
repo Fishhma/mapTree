@@ -7,4 +7,5 @@ urlpatterns = [
     path("tree.svg", views.tree_svg, name="tree-svg"),
     path("api/tree/", views.tree_api, name="tree-api"),
     path("api/people/<int:pk>/", views.person_api, name="person-api"),
+    path("api/people/<int:pk>/add/", views.add_relative_api, name="person-add"),
 ]

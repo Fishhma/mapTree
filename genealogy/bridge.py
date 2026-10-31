@@ -45,7 +45,7 @@ def tree_payload() -> dict:
     tree = build_tree()
     root = root_id(tree)
     if root is None:
-        return {"people": {}, "boxes": [], "unions": [], "lines": [], "rows": [],
+        return {"people": {}, "families": {}, "boxes": [], "unions": [], "lines": [], "rows": [],
                 "width": 800, "height": 400, "card": {"w": CARD_W, "h": CARD_H},
                 "root": None, "warnings": []}
     layout = compute_layout(tree, root)
@@ -62,6 +62,7 @@ def tree_payload() -> dict:
         }
     return {
         "people": people,
+        "families": {fid: {"partners": f.partners} for fid, f in tree.families.items()},
         "boxes": [{"id": b.pid, "x": round(b.x, 1), "y": round(b.y, 1), "gen": b.gen}
                   for b in layout.boxes.values()],
         "unions": [{"id": u.fid, "x": round(u.x, 1), "y": round(u.y, 1)}
