@@ -107,6 +107,15 @@ class GenerationsTest(unittest.TestCase):
         self.assertEqual(gen["julia"], 2)
         self.assertEqual(gen["evg"], 3)
 
+    def test_youngest_row_is_generation_one(self):
+        # У опорного человека появился племянник: нумерация начинается с племянника, без 0.
+        t = build({"me": ("Я", "M", None), "bro": ("Брат", "M", None), "dad": ("Отец", "M", None),
+                   "kid": ("Племянница", "F", None)},
+                  [("fd", ["dad"], ["me", "bro"]), ("fb", ["bro"], ["kid"])])
+        gen, _ = assign_generations(t, "me")
+        self.assertEqual((gen["kid"], gen["me"], gen["bro"], gen["dad"]), (1, 2, 2, 3))
+        self.assertEqual(min(gen.values()), 1)
+
     @needs_ged
     def test_parents_always_above_children_on_real_tree(self):
         tree = load(GED)
