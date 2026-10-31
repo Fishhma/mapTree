@@ -31,10 +31,10 @@
       <button type="button" id="fit" title="Показать всё древо (0)">Всё древо</button>
       <button type="button" id="to-root" title="Ко мне">Ко мне</button>
       <a class="button" href="{% url 'tree-svg' %}" title="Всё древо одним файлом для печати">SVG для печати</a>
-      <a class="button" href="{% url 'admin:index' %}">Редактор</a>
     </nav>
 
     <p class="message" id="message" hidden></p>
+    {% for m in messages %}<p class="toast" role="status">{{ m }}</p>{% endfor %}
     <div class="add-menu" id="add-menu" role="menu" hidden></div>
   </main>
 

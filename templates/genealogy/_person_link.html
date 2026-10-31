@@ -1,0 +1,1 @@
+<li><a href="{% url 'person-page' p.code %}"><span class="dot {{ p.sex }}"></span>{{ p.given_name|default:"?" }} {{ p.patronymic }} {{ p.birth_surname }}<span class="code">{{ p.code }}</span></a></li>

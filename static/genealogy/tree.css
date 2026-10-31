@@ -90,6 +90,10 @@ body.panel-open .stats { display: none; }
 
 .message { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); margin: 0;
   max-width: 460px; text-align: center; color: var(--muted); }
+.toast { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 3; margin: 0;
+  padding: 10px 16px; border-radius: 6px; background: var(--ink); color: var(--surface);
+  animation: toast-out .4s 4s forwards; }
+@keyframes toast-out { to { opacity: 0; visibility: hidden; } }
 .message code { background: var(--surface); padding: 2px 6px; border-radius: 4px; color: var(--ink); }
 
 /* ---------- панель человека ---------- */
@@ -111,9 +115,6 @@ body.panel-open .stats { display: none; }
   background: var(--surface); text-decoration: none; cursor: pointer; font-size: 14px; }
 .p-actions a { color: var(--ink); }
 .p-actions a:hover { border-color: var(--line); }
-.p-actions .danger { color: #a2283f; }
-.p-actions [aria-disabled="true"] { color: var(--muted); cursor: not-allowed; }
-.p-blockers { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
 
 .p-section { margin-top: 24px; }
 .p-section h3 { margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--hairline);

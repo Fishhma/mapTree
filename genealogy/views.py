@@ -1,8 +1,10 @@
 import json
 
+from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
@@ -12,8 +14,10 @@ from tree_engine.model import FuzzyDate
 from tree_engine.render_svg import render as render_svg
 
 from .bridge import build_tree, root_id, tree_payload
-from .editing import EditError, add_relative, error_text
-from .models import Event, Person
+from .editing import (EditError, add_relative, delete_person, deletion_summary, error_text,
+                      save_key_events)
+from .forms import DATE_HINT, KeyEventsForm, PersonForm
+from .models import Event, Person, Place
 
 
 @ensure_csrf_cookie          # браузеру нужен CSRF-токен для добавления людей
@@ -105,9 +109,7 @@ def person_api(request, pk):
         "names": [{"kind": n.get_kind_display(), "name": str(n), "date": n.date, "note": n.note}
                   for n in person.names.all()],
         "parents": parents, "siblings": siblings, "families": families, "sources": sources,
-        "deletion_blockers": person.deletion_blockers(),
-        "admin_url": reverse("admin:genealogy_person_change", args=[person.pk]),
-        "delete_url": reverse("admin:genealogy_person_delete", args=[person.pk]),
+        "details_url": reverse("person-page", args=[person.code]),
     })
     return JsonResponse(data)
 
@@ -127,3 +129,45 @@ def add_relative_api(request, pk):
     except (EditError, ValidationError) as exc:
         return JsonResponse({"error": error_text(exc)}, status=400)
     return JsonResponse({"id": str(new.pk), "code": new.code}, status=201)
+
+
+def person_page(request, code):
+    """Страница человека: подробности, правка и удаление (только здесь, не в панели древа)."""
+    person = get_object_or_404(Person, code=code)
+    delete_error = ""
+    if request.method == "POST" and request.POST.get("action") == "delete":
+        try:
+            delete_person(person, request.POST.get("confirm_code", ""))
+        except EditError as exc:
+            delete_error = str(exc)
+        else:
+            messages.success(request, f"{person.code} удалён(а).")
+            return redirect("tree")
+    if request.method == "POST" and not delete_error:
+        form = PersonForm(request.POST, instance=person)
+        events_form = KeyEventsForm(request.POST, person=person)
+        if form.is_valid() and events_form.is_valid():
+            with transaction.atomic():
+                form.save()
+                save_key_events(person, events_form.events, events_form.cleaned_data)
+            messages.success(request, "Изменения сохранены.")
+            return redirect("person-page", code=person.code)
+    else:
+        form = PersonForm(instance=person)
+        events_form = KeyEventsForm(person=person)
+
+    pf = person.parent_family
+    families = []
+    for fam in person.families.select_related("partner1", "partner2"):
+        spouse = fam.partner2 if fam.partner1_id == person.pk else fam.partner1
+        families.append({"spouse": spouse, "children": list(fam.children.all())})
+    return render(request, "genealogy/person.html", {
+        "person": person, "form": form, "events_form": events_form,
+        "parents": pf.partners if pf else [],
+        "siblings": list(pf.children.exclude(pk=person.pk)) if pf else [],
+        "families": families,
+        "places": Place.objects.values_list("name", flat=True), "date_hint": DATE_HINT,
+        "blockers": person.deletion_blockers(),
+        "summary": deletion_summary(person),
+        "delete_error": delete_error,
+    })

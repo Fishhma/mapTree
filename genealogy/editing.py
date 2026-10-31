@@ -1,6 +1,6 @@
-"""Добавление родственников прямо с древа: «+» на карточке.
+"""Изменение данных: добавление родственников, правка и удаление человека.
 
-Ребёнок, супруг(а), родитель, родной брат или сестра — всегда НОВЫЙ человек
+«+» на карточке: ребёнок, супруг(а), родитель, родной брат или сестра — всегда НОВЫЙ человек
 (связывание с уже существующим — отдельный шаг). Все поля необязательны.
 Связи строятся только через семьи (союзы), как и везде в проекте.
 """
@@ -86,6 +86,51 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
         new.parent_family = parents
         new.save(update_fields=["parent_family"])
     return new
+
+
+def save_key_events(person: Person, events: dict[str, Event], data: dict) -> None:
+    """Записать дату и место ключевых событий (рождение, крещение, смерть, погребение).
+
+    `events` — уже существующие события по виду, `data` — cleaned_data формы.
+    Если дату и место стёрли, событие удаляется, но только когда в нём больше
+    ничего нет (описания, значения, ссылок на источники).
+    """
+    for kind in ("BIRT", "CHR", "DEAT", "BURI"):
+        date, place = _text(data, f"{kind}_date"), _text(data, f"{kind}_place")
+        event = events.get(kind)
+        if event is None:
+            if date or place:
+                Event.objects.create(person=person, kind=kind, date=date,
+                                     place=_find_or_create_place(place))
+            continue
+        if not date and not place and not event.value and not event.description \
+                and not event.citations.exists():
+            event.delete()
+            continue
+        event.date, event.place = date, _find_or_create_place(place)
+        event.save()
+
+
+def deletion_summary(person: Person) -> list[str]:
+    """Что исчезнет вместе с человеком — показывается перед удалением."""
+    items = []
+    for count, word in ((person.events.count(), "событий и фактов"),
+                        (person.names.count(), "вариантов имени"),
+                        (person.citations.count(), "ссылок на источники (сами источники останутся)")):
+        if count:
+            items.append(f"{word}: {count}")
+    return items
+
+
+@transaction.atomic
+def delete_person(person: Person, typed_code: str) -> None:
+    """Удаление — второе подтверждение: нужно ввести номер именно этого человека."""
+    blockers = person.deletion_blockers()
+    if blockers:
+        raise EditError("Удалить нельзя: " + "; ".join(blockers) + ".")
+    if typed_code.strip().upper() != person.code:
+        raise EditError(f"Номер не совпадает. Чтобы удалить, введите {person.code}.")
+    person.delete()
 
 
 def error_text(exc: Exception) -> str:

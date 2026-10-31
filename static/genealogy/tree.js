@@ -279,7 +279,6 @@ function eventList(items, emptyText) {
 }
 
 function renderPanel(p) {
-  const blocked = p.deletion_blockers.length > 0;
   const nodes = [
     h("div", { class: "p-head" },
       h("span", { class: `p-sex ${p.sex}` }),
@@ -288,12 +287,8 @@ function renderPanel(p) {
           p.patronymic ? h("span", { class: "patr" }, p.patronymic) : null,
           p.surname ? h("span", {}, " ", p.surname) : null),
         h("p", { class: "p-meta" }, [p.code, p.years, p.sex_label].filter(Boolean).join(" · ")))),
-    h("div", { class: "p-actions" },
-      h("a", { href: p.admin_url }, "Изменить"),
-      blocked
-        ? h("span", { class: "danger", "aria-disabled": "true", title: p.deletion_blockers.join("; ") }, "Удалить")
-        : h("a", { class: "danger", href: p.delete_url }, "Удалить")),
-    blocked ? h("p", { class: "p-blockers" }, "Удалить нельзя: " + p.deletion_blockers.join("; ") + ".") : null,
+    // Правка и удаление — только на отдельной странице человека (защита от случайных изменений).
+    h("div", { class: "p-actions" }, h("a", { href: p.details_url }, "Изменить")),
     section("Ключевые сведения", h("dl", { class: "facts" }, p.key.flatMap((e) => [
       h("dt", {}, e.label),
       h("dd", {}, e.date || (e.place ? "" : "—"), e.place ? h("span", { class: "place" }, e.place) : null),
@@ -320,7 +315,7 @@ function renderPanel(p) {
       s.repository ? h("div", { class: "meta" }, s.repository, s.reference ? `, ${s.reference}` : "") : null,
       s.files.length ? h("div", { class: "thumbs" }, s.files.map((f) => h("a", { href: f.url, target: "_blank", title: f.caption },
         f.is_image ? h("img", { src: f.url, alt: f.caption, loading: "lazy" }) : f.caption))) : null))
-      : h("p", { class: "p-empty" }, "Документы и фото добавляются в редакторе: раздел «Источники».")),
+      : h("p", { class: "p-empty" }, "Пока нет")),
     p.notes ? section("Жизнеописание", h("p", { class: "notes" }, p.notes)) : null,
   ];
   panelBody.replaceChildren(...nodes.flat().filter(Boolean));

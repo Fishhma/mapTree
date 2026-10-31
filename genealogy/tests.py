@@ -119,7 +119,7 @@ class ApiTest(SmallTreeMixin, TestCase):
         self.assertEqual(len(p["families"]), 2)
         self.assertEqual(p["parents"][0]["name"], "Дед")
         self.assertEqual(p["siblings"][0]["name"], "Дядя")
-        self.assertTrue(p["deletion_blockers"])
+        self.assertEqual(p["details_url"], f"/people/{self.libor.code}/")
         m = self.client.get(f"/api/people/{self.marian.pk}/").json()
         self.assertEqual(m["key"][0]["date"], "6 января 2007")
 
@@ -205,6 +205,67 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
         r = Client(enforce_csrf_checks=True).post(f"/api/people/{self.marian.pk}/add/", {"relation": "child"},
                                                  content_type="application/json")
         self.assertEqual(r.status_code, 403)
+
+
+class PersonPageTest(SmallTreeMixin, TestCase):
+    """Страница /people/P0001/: правка и удаление только здесь."""
+
+    def setUp(self):
+        self.make_tree()
+
+    def url(self, person):
+        return f"/people/{person.code}/"
+
+    def save(self, person, **fields):
+        data = {"given_name": person.given_name, "sex": person.sex, **fields}
+        return self.client.post(self.url(person), data)
+
+    def test_page_shows_person_and_family(self):
+        r = self.client.get(self.url(self.libor))
+        self.assertContains(r, "Libor")
+        self.assertContains(r, self.url(self.marian))              # ссылка на ребёнка
+        self.assertContains(r, "Удалить нельзя")                    # у Libor есть дети
+        self.assertEqual(self.client.get("/people/P9999/").status_code, 404)
+
+    def test_marian_birth_date_shown_in_user_format(self):
+        self.assertContains(self.client.get(self.url(self.marian)), 'value="06.01.2007"')
+
+    def test_save_fields_and_key_events(self):
+        r = self.save(self.uncle, given_name="Дядя Ваня", patronymic="Петрович", sex="M",
+                      BIRT_date="около 1950", BIRT_place="Brno", DEAT_date="2.3.2020", notes="Жил долго.")
+        self.assertRedirects(r, self.url(self.uncle))
+        uncle = Person.objects.get(pk=self.uncle.pk)
+        self.assertEqual((uncle.given_name, uncle.patronymic, uncle.notes),
+                         ("Дядя Ваня", "Петрович", "Жил долго."))
+        self.assertEqual(uncle.events.get(kind="BIRT").date, "ABT 1950")
+        self.assertEqual(uncle.events.get(kind="BIRT").place.name, "Brno")
+        self.assertEqual(uncle.events.get(kind="DEAT").date, "2 MAR 2020")
+
+    def test_clearing_key_event_removes_it(self):
+        self.save(self.ondrej)                                     # дату рождения стёрли
+        self.assertFalse(self.ondrej.events.filter(kind="BIRT").exists())
+
+    def test_cleared_event_with_description_is_kept(self):
+        Event.objects.filter(person=self.ondrej, kind="BIRT").update(description="в роддоме")
+        self.save(self.ondrej)
+        self.assertEqual(self.ondrej.events.get(kind="BIRT").date, "")
+
+    def test_delete_needs_exact_code(self):
+        r = self.client.post(self.url(self.uncle), {"action": "delete", "confirm_code": "P0000"})
+        self.assertContains(r, "Номер не совпадает")
+        self.assertTrue(Person.objects.filter(pk=self.uncle.pk).exists())
+        r = self.client.post(self.url(self.uncle), {"action": "delete",
+                                                    "confirm_code": self.uncle.code.lower()})
+        self.assertRedirects(r, "/")
+        self.assertFalse(Person.objects.filter(pk=self.uncle.pk).exists())
+
+    def test_blocked_person_cannot_be_deleted(self):
+        r = self.client.post(self.url(self.libor), {"action": "delete", "confirm_code": self.libor.code})
+        self.assertContains(r, "Удалить нельзя")
+        self.assertTrue(Person.objects.filter(pk=self.libor.pk).exists())
+
+    def test_tree_page_has_no_admin_button(self):
+        self.assertNotContains(self.client.get("/"), "/admin/")
 
 
 @unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")
