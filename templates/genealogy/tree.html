@@ -1,0 +1,47 @@
+{% load static %}<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Генеалогическое древо</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&family=PT+Serif:wght@400;700&display=swap">
+  <link rel="stylesheet" href="{% static 'genealogy/tree.css' %}">
+</head>
+<body>
+  <main class="stage" id="stage">
+    <svg id="canvas" class="canvas" aria-label="Генеалогическое древо">
+      <g id="world"></g>
+    </svg>
+    <div class="ruler" id="ruler" aria-hidden="true"></div>
+
+    <header class="bar">
+      <h1 class="title">Древо</h1>
+      <div class="search">
+        <input id="search" type="search" placeholder="Найти человека" autocomplete="off"
+               aria-label="Найти человека по имени или номеру">
+        <ul id="search-results" class="search-results" hidden></ul>
+      </div>
+      <span class="stats" id="stats"></span>
+    </header>
+
+    <nav class="controls" aria-label="Управление видом">
+      <button type="button" id="zoom-out" title="Отдалить (−)">−</button>
+      <button type="button" id="zoom-in" title="Приблизить (+)">+</button>
+      <button type="button" id="fit" title="Показать всё древо (0)">Всё древо</button>
+      <button type="button" id="to-root" title="Ко мне">Ко мне</button>
+      <a class="button" href="{% url 'tree-svg' %}" title="Всё древо одним файлом для печати">SVG для печати</a>
+      <a class="button" href="{% url 'admin:index' %}">Редактор</a>
+    </nav>
+
+    <p class="message" id="message" hidden></p>
+  </main>
+
+  <aside class="panel" id="panel" aria-live="polite" hidden>
+    <button type="button" class="panel-close" id="panel-close" aria-label="Закрыть карточку">×</button>
+    <div id="panel-body"></div>
+  </aside>
+
+  <script type="module" src="{% static 'genealogy/tree.js' %}"></script>
+</body>
+</html>

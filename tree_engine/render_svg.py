@@ -32,7 +32,7 @@ def render(tree: Tree, layout: Layout, root: str | None = None, title: str = "")
     dy = 60 if title else 0
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W:.0f}" height="{H:.0f}" '
-        f'viewBox="0 0 {W:.0f} {H:.0f}" font-family="DejaVu Sans, Segoe UI, sans-serif">',
+        f'viewBox="0 0 {W:.0f} {H:.0f}" font-family="PT Sans, Segoe UI, DejaVu Sans, sans-serif">',
         f'<rect width="100%" height="100%" fill="{COLORS["paper"]}"/>',
     ]
     if title:

@@ -150,3 +150,22 @@ class LayoutTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UserDateInputTest(unittest.TestCase):
+    def test_normalize(self):
+        from tree_engine.model import normalize_date
+        cases = {"10.08.1962": "10 AUG 1962", "8.1962": "AUG 1962", "1962": "1962",
+                 "около 1850": "ABT 1850", "до 1790": "BEF 1790", "после 1900": "AFT 1900",
+                 "1850-1860": "BET 1850 AND 1860", "6 jan 2007": "6 JAN 2007", "весна 1945": "весна 1945"}
+        for given, expected in cases.items():
+            self.assertEqual(normalize_date(given), expected, given)
+
+    def test_display(self):
+        self.assertEqual(FuzzyDate("10 AUG 1962").display_ru(), "10 августа 1962")
+        self.assertEqual(FuzzyDate("BET 1850 AND 1860").display_ru(), "между 1850 и 1860")
+
+    def test_round_trip_to_user_format(self):
+        from tree_engine.model import normalize_date, to_user_date
+        for text in ["10.08.1962", "08.1962", "1962", "около 1850", "до 1790", "между 1850 и 1860", "весна 1945"]:
+            self.assertEqual(to_user_date(normalize_date(text)), text)

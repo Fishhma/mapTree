@@ -64,8 +64,6 @@ def parse(text: str) -> Tree:
                     cur_person.surname = surname
                 elif tag == "SEX":
                     cur_person.sex = value.strip()[:1] or "U"
-                elif tag == "_FSFTID":
-                    cur_person.external_id = value.strip()
                 elif tag == "FAMC" and cur_person.parent_family is None:
                     cur_person.parent_family = value.strip()
                 elif tag == "FAMS":

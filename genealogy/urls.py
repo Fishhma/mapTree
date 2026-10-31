@@ -1,0 +1,10 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("", views.tree_page, name="tree"),
+    path("tree.svg", views.tree_svg, name="tree-svg"),
+    path("api/tree/", views.tree_api, name="tree-api"),
+    path("api/people/<int:pk>/", views.person_api, name="person-api"),
+]

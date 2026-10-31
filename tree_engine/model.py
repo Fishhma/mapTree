@@ -12,6 +12,78 @@ from dataclasses import dataclass, field
 
 MONTHS = {m: i for i, m in enumerate(
     "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(), start=1)}
+MONTH_CODES = {i: m for m, i in MONTHS.items()}
+RU_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+             "августа", "сентября", "октября", "ноября", "декабря"]
+RU_MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль",
+                 "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
+_PREFIXES = [  # (варианты ввода, код GEDCOM)
+    (("около", "ок.", "ок", "~", "abt", "circa", "ca", "cca", "asi"), "ABT"),
+    (("до", "<", "bef", "před"), "BEF"),
+    (("после", ">", "aft", "po"), "AFT"),
+]
+
+
+def _date_core(text: str) -> str | None:
+    """«10.08.1962» → «10 AUG 1962», «08.1962» → «AUG 1962», «1962» → «1962»."""
+    text = text.strip()
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{1,2})[./-](\d{3,4})", text)
+    if m and 1 <= int(m[2]) <= 12 and 1 <= int(m[1]) <= 31:
+        return f"{int(m[1])} {MONTH_CODES[int(m[2])]} {int(m[3])}"
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{3,4})", text)
+    if m and 1 <= int(m[1]) <= 12:
+        return f"{MONTH_CODES[int(m[1])]} {int(m[2])}"
+    if re.fullmatch(r"\d{3,4}", text):
+        return text
+    m = re.fullmatch(r"(?:(\d{1,2})\s+)?([A-Za-z]{3})\s+(\d{3,4})", text)
+    if m and m[2].upper() in MONTHS:
+        return " ".join(x for x in (m[1], m[2].upper(), m[3]) if x)
+    return None
+
+
+def normalize_date(text: str) -> str:
+    """Ввод пользователя → строка в стиле GEDCOM. Нераспознанное остаётся как есть.
+
+    «10.08.1962», «1962», «около 1850», «до 1790», «после 1900»,
+    «1850–1860», «между 1850 и 1860», а также формат GEDCOM.
+    """
+    raw = " ".join(text.split())
+    if not raw:
+        return ""
+    low = raw.lower()
+    m = re.fullmatch(r"(?:между|bet)\s+(.+?)\s+(?:и|and)\s+(.+)", low) or \
+        re.fullmatch(r"(\d{3,4})\s*[-–—]\s*(\d{3,4})", low)
+    if m:
+        a, b = _date_core(m[1]), _date_core(m[2])
+        if a and b:
+            return f"BET {a} AND {b}"
+    for variants, code in _PREFIXES:
+        for v in variants:
+            if low.startswith(v) and (not v[-1].isalpha() or low[len(v):len(v) + 1] in (" ", "")):
+                core = _date_core(raw[len(v):])
+                if core:
+                    return f"{code} {core}"
+    return _date_core(raw) or raw
+
+
+def to_user_date(raw: str) -> str:
+    """Обратно к привычному вводу: «10 AUG 1962» → «10.08.1962», «ABT 1850» → «около 1850»."""
+    def core(text: str) -> str:
+        parts = text.split()
+        if len(parts) == 3 and parts[1] in MONTHS:
+            return f"{int(parts[0]):02d}.{MONTHS[parts[1]]:02d}.{parts[2]}"
+        if len(parts) == 2 and parts[0] in MONTHS:
+            return f"{MONTHS[parts[0]]:02d}.{parts[1]}"
+        return text
+    up = raw.upper().strip()
+    m = re.fullmatch(r"BET (.+) AND (.+)", up)
+    if m:
+        return f"между {core(m[1])} и {core(m[2])}"
+    for code, word in (("ABT ", "около "), ("EST ", "около "), ("CAL ", "около "),
+                       ("BEF ", "до "), ("AFT ", "после ")):
+        if up.startswith(code):
+            return word + core(up[len(code):])
+    return core(up) if _date_core(raw) else raw
 
 
 @dataclass
@@ -44,6 +116,30 @@ class FuzzyDate:
     def short(self) -> str:
         return f"{self.qualifier}{self.year}" if self.year else "?"
 
+    def display_ru(self) -> str:
+        """«10 AUG 1962» → «10 августа 1962», «ABT 1850» → «около 1850»."""
+        def core(text: str) -> str:
+            parts = text.split()
+            if len(parts) == 3 and parts[1] in MONTHS:
+                return f"{int(parts[0])} {RU_MONTHS[MONTHS[parts[1]] - 1]} {parts[2]}"
+            if len(parts) == 2 and parts[0] in MONTHS:
+                return f"{RU_MONTHS_NOM[MONTHS[parts[0]] - 1]} {parts[1]}"
+            return text
+        raw = self.raw.upper()
+        m = re.fullmatch(r"BET (.+) AND (.+)", raw)
+        if m:
+            return f"между {core(m[1])} и {core(m[2])}"
+        for code, word in (("ABT ", "около "), ("EST ", "около "), ("CAL ", "около "),
+                           ("BEF ", "до "), ("AFT ", "после ")):
+            if raw.startswith(code):
+                return word + core(raw[len(code):])
+        return core(raw) if _date_core(self.raw) else self.raw
+
+    @property
+    def sort_int(self) -> int:
+        y, m, d = self.sort_key
+        return y * 10000 + m * 100 + d
+
 
 @dataclass
 class Event:
@@ -60,7 +156,6 @@ class Person:
     patronymic: str = ""           # отчество
     surname: str = ""              # фамилия при рождении (девичья)
     sex: str = "U"                 # M / F / U
-    external_id: str = ""          # например, ID FamilySearch
     events: list[Event] = field(default_factory=list)
     parent_family: str | None = None          # семья, где он ребёнок
     families: list[str] = field(default_factory=list)  # семьи, где он партнёр
