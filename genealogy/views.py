@@ -10,7 +10,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 
 from tree_engine.layout import compute_layout
-from tree_engine.model import FuzzyDate
+from tree_engine.model import FuzzyDate, lifespan
 from tree_engine.render_svg import render as render_svg
 
 from .bridge import build_tree, root_id, tree_payload
@@ -47,11 +47,8 @@ def _brief(p: Person | None):
     events = list(p.events.all())
     pick = lambda *kinds: next((e for k in kinds for e in events if e.kind == k), None)  # noqa: E731
     birth, death = pick("BIRT", "CHR"), pick("DEAT", "BURI")
-    years = ""
-    if birth or death:
-        start = FuzzyDate(birth.date).short() if birth and birth.date else "?"
-        end = (FuzzyDate(death.date).short() if death.date else "†") if death else ""
-        years = f"{start}–{end}"
+    years = lifespan(FuzzyDate(birth.date) if birth and birth.date else None, death is not None,
+                     FuzzyDate(death.date) if death and death.date else None, p.is_living)
     name = " ".join(x for x in (p.given_name, p.patronymic, p.birth_surname) if x) or "?"
     return {"id": str(p.pk), "code": p.code, "name": name, "sex": p.sex, "years": years}
 
@@ -147,6 +144,9 @@ def person_page(request, code):
         form = PersonForm(request.POST, instance=person)
         events_form = KeyEventsForm(request.POST, person=person)
         if form.is_valid() and events_form.is_valid():
+            if not form.has_changed() and not events_form.has_changed():
+                messages.info(request, "Изменений нет.")
+                return redirect("person-page", code=person.code)
             with transaction.atomic():
                 form.save()
                 save_key_events(person, events_form.events, events_form.cleaned_data)

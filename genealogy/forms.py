@@ -6,13 +6,13 @@ from tree_engine.model import to_user_date
 from .models import Event, Person
 
 KEY_KINDS = ("BIRT", "CHR", "DEAT", "BURI")
-DATE_HINT = "10.08.1962 · около 1850 · до 1790 · 1850-1860"
+DATE_HINT = "10.08.1962 · около 1850 · до 1790 · после 1900 · 1850-52 · 1850/51"
 
 
 class PersonForm(forms.ModelForm):
     class Meta:
         model = Person
-        fields = ["given_name", "patronymic", "birth_surname", "sex", "notes"]
+        fields = ["given_name", "patronymic", "birth_surname", "sex", "is_living", "notes"]
         widgets = {
             "notes": forms.Textarea(attrs={"rows": 8}),
         }

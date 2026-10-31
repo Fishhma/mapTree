@@ -23,6 +23,9 @@ class Person(models.Model):
         "фамилия при рождении", max_length=120, blank=True,
         help_text="Для женщин — девичья. Смена фамилии хранится в вариантах имени.")
     sex = models.CharField("пол", max_length=1, choices=Sex.choices, default=Sex.UNKNOWN)
+    is_living = models.BooleanField(
+        "жив(а)", default=False,
+        help_text="Без даты смерти в древе: у живых «2007–», у остальных «1849–?».")
     parent_family = models.ForeignKey(
         "Family", verbose_name="семья родителей", null=True, blank=True,
         on_delete=models.SET_NULL, related_name="children")

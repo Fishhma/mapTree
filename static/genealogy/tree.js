@@ -65,7 +65,7 @@ function draw() {
 
   for (const line of data.lines) {
     el("path", {
-      d: "M " + line.points.map(([x, y]) => `${x} ${y}`).join(" L "),
+      d: line.d,              // углы скруглены на сервере (render_svg.rounded_path)
       class: `link ${line.kind}`, "data-family": line.family,
     }, linesLayer);
   }
@@ -409,8 +409,9 @@ function showAddForm(id, relation) {
       h("option", { value: "U" }, "Неизвестен"), h("option", { value: "M" }, "Мужской"),
       h("option", { value: "F" }, "Женский"))),
     field("Дата рождения", h("input", { name: "birth_date", autocomplete: "off",
-      placeholder: "10.08.1962 · около 1850 · 1850-1860" })),
+      placeholder: "10.08.1962 · около 1850 · 1850/51" })),
     field("Место рождения", h("input", { name: "birth_place", autocomplete: "off", list: "places" })),
+    h("label", { class: "f-check" }, h("input", { type: "checkbox", name: "is_living" }), " Жив(а)"),
     h("datalist", { id: "places" }, places.map((pl) => h("option", { value: pl }))),
     h("p", { class: "f-hint" }, "Все поля необязательны."),
     error,

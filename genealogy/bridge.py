@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from tree_engine import model as engine
 from tree_engine.layout import CARD_H, CARD_W, compute_layout
+from tree_engine.render_svg import rounded_path
 
 from .models import Event, Family, Person, TreeSettings
 
@@ -12,7 +13,7 @@ def build_tree() -> engine.Tree:
     for p in Person.objects.all():
         tree.people[str(p.pk)] = engine.Person(
             id=str(p.pk), given=p.given_name, patronymic=p.patronymic,
-            surname=p.birth_surname, sex=p.sex,
+            surname=p.birth_surname, sex=p.sex, living=p.is_living,
             parent_family=str(p.parent_family_id) if p.parent_family_id else None)
     for e in Event.objects.select_related("place").filter(person__isnull=False):
         tree.people[str(e.person_id)].events.append(engine.Event(
@@ -67,8 +68,7 @@ def tree_payload() -> dict:
                   for b in layout.boxes.values()],
         "unions": [{"id": u.fid, "x": round(u.x, 1), "y": round(u.y, 1)}
                    for u in layout.unions.values()],
-        "lines": [{"kind": ln.kind, "family": ln.fid,
-                   "points": [[round(x, 1), round(y, 1)] for x, y in ln.points]}
+        "lines": [{"kind": ln.kind, "family": ln.fid, "d": rounded_path(ln.points)}
                   for ln in layout.lines],
         "rows": [{"gen": g, "y": y} for g, y in sorted(layout.rows.items())],
         "width": round(layout.width), "height": round(layout.height),

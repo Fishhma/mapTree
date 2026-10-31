@@ -30,7 +30,8 @@ def _find_or_create_place(name: str) -> Place | None:
 def _create_person(data: dict) -> Person:
     sex = data.get("sex") if data.get("sex") in Person.Sex.values else Person.Sex.UNKNOWN
     person = Person(given_name=_text(data, "given_name"), patronymic=_text(data, "patronymic"),
-                    birth_surname=_text(data, "birth_surname"), sex=sex)
+                    birth_surname=_text(data, "birth_surname"), sex=sex,
+                    is_living=bool(data.get("is_living")))
     person.full_clean(exclude=["code", "parent_family"])
     person.save()
     date, place = _text(data, "birth_date"), _text(data, "birth_place")

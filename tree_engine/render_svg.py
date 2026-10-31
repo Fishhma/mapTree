@@ -27,6 +27,28 @@ def _fit(text: str, size: float, width: float) -> str:
     return text if len(text) <= max_chars else text[: max_chars - 1] + "…"
 
 
+def rounded_path(points: list[tuple[float, float]], radius: float = 12) -> str:
+    """Ломаная → SVG-путь со скруглёнными углами (дуга-кривая вместо прямого угла).
+
+    Радиус уменьшается на коротких отрезках, чтобы скругление не «съело» отрезок.
+    """
+    pts = [p for i, p in enumerate(points) if i == 0 or p != points[i - 1]]
+    if len(pts) < 3:
+        return "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
+    d = [f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"]
+    for (ax, ay), (bx, by), (cx, cy) in zip(pts, pts[1:], pts[2:]):
+        len_in = abs(bx - ax) + abs(by - ay)
+        len_out = abs(cx - bx) + abs(cy - by)
+        r = min(radius, len_in / 2, len_out / 2)
+        sx = bx - r * ((bx > ax) - (bx < ax))
+        sy = by - r * ((by > ay) - (by < ay))
+        ex = bx + r * ((cx > bx) - (cx < bx))
+        ey = by + r * ((cy > by) - (cy < by))
+        d.append(f"L {sx:.1f} {sy:.1f} Q {bx:.1f} {by:.1f} {ex:.1f} {ey:.1f}")
+    d.append(f"L {pts[-1][0]:.1f} {pts[-1][1]:.1f}")
+    return " ".join(d)
+
+
 def render(tree: Tree, layout: Layout, root: str | None = None, title: str = "") -> str:
     W, H = layout.width + 70, layout.height + (60 if title else 0)
     dy = 60 if title else 0
@@ -47,7 +69,7 @@ def render(tree: Tree, layout: Layout, root: str | None = None, title: str = "")
 
     # линии
     for line in layout.lines:
-        d = "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in line.points)
+        d = rounded_path(line.points)
         w = 1.6 if line.kind == "marriage" else 1.3
         out.append(f'<path d="{d}" fill="none" stroke="{COLORS["line"]}" stroke-width="{w}" '
                    f'stroke-linejoin="round" data-family="{escape(line.fid)}"/>')

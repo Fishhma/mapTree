@@ -35,6 +35,9 @@ def _date_core(text: str) -> str | None:
         return f"{MONTH_CODES[int(m[1])]} {int(m[2])}"
     if re.fullmatch(r"\d{3,4}", text):
         return text
+    m = re.fullmatch(r"(\d{3,4})/(\d{1,4})", text)       # двойной год: «1850/51»
+    if m and int(m[1][:-len(m[2])] + m[2]) == int(m[1]) + 1:
+        return f"{m[1]}/{m[2][-2:].zfill(2)}"
     m = re.fullmatch(r"(?:(\d{1,2})\s+)?([A-Za-z]{3})\s+(\d{3,4})", text)
     if m and m[2].upper() in MONTHS:
         return " ".join(x for x in (m[1], m[2].upper(), m[3]) if x)
@@ -45,16 +48,20 @@ def normalize_date(text: str) -> str:
     """Ввод пользователя → строка в стиле GEDCOM. Нераспознанное остаётся как есть.
 
     «10.08.1962», «1962», «около 1850», «до 1790», «после 1900»,
-    «1850–1860», «между 1850 и 1860», а также формат GEDCOM.
+    «1850–1860», «1850-52», «между 1850 и 1860», двойной год «1850/51»,
+    а также формат GEDCOM.
     """
     raw = " ".join(text.split())
     if not raw:
         return ""
     low = raw.lower()
     m = re.fullmatch(r"(?:между|bet)\s+(.+?)\s+(?:и|and)\s+(.+)", low) or \
-        re.fullmatch(r"(\d{3,4})\s*[-–—]\s*(\d{3,4})", low)
+        re.fullmatch(r"(\d{3,4})\s*[-–—]\s*(\d{1,4})", low)
     if m:
-        a, b = _date_core(m[1]), _date_core(m[2])
+        second = m[2]
+        if second.isdigit() and len(second) < len(m[1]):        # «1850-52» → 1852
+            second = m[1][:-len(second)] + second
+        a, b = _date_core(m[1]), _date_core(second)
         if a and b:
             return f"BET {a} AND {b}"
     for variants, code in _PREFIXES:
@@ -91,7 +98,7 @@ class FuzzyDate:
     """Генеалогическая дата: хранит исходную строку и ключ сортировки.
 
     Понимает «6 JAN 2007», «JAN 2007», «1745», «ABT 1850», «BEF 1790»,
-    «AFT 1900», «BET 1850 AND 1860».
+    «AFT 1900», «BET 1850 AND 1860», двойной год «1850/51».
     """
     raw: str
 
@@ -114,7 +121,17 @@ class FuzzyDate:
         return {"ABT": "~", "EST": "~", "CAL": "~", "BEF": "<", "AFT": ">"}.get(first, "")
 
     def short(self) -> str:
-        return f"{self.qualifier}{self.year}" if self.year else "?"
+        """Год для карточки в древе: «1850», «~1850», «<1850», «>1850», «1850-52», «1850/51»."""
+        if not self.year:
+            return "?"
+        m = re.fullmatch(r"BET .*?(\d{3,4}) AND .*?(\d{3,4})", self.raw.upper())
+        if m:
+            a, b = m[1], m[2]
+            if a == b:
+                return a
+            return f"{a}-{b[2:]}" if len(a) == len(b) == 4 and a[:2] == b[:2] else f"{a}-{b}"
+        dual = re.search(r"\b(\d{3,4}/\d{2})\b", self.raw)
+        return f"{self.qualifier}{dual[1] if dual else self.year}"
 
     def display_ru(self) -> str:
         """«10 AUG 1962» → «10 августа 1962», «ABT 1850» → «около 1850»."""
@@ -159,6 +176,7 @@ class Person:
     events: list[Event] = field(default_factory=list)
     parent_family: str | None = None          # семья, где он ребёнок
     families: list[str] = field(default_factory=list)  # семьи, где он партнёр
+    living: bool = False           # жив(а): тогда без даты смерти пишем «2007–», а не «2007–?»
 
     def event(self, kind: str) -> Event | None:
         return next((e for e in self.events if e.kind == kind), None)
@@ -181,15 +199,26 @@ class Person:
         return b.date.sort_key if b and b.date else (9999, 0, 0)
 
     def years(self) -> str:
-        b, d = self.birth, self.death
-        start = b.date.short() if b and b.date else ""
-        if d:
-            end = d.date.short() if d.date else "†"
-        else:
-            end = ""
-        if not start and not end:
-            return ""
-        return f"{start or '?'}–{end}"
+        d = self.death
+        return lifespan(self.birth.date if self.birth else None,
+                        d is not None, d.date if d else None, self.living)
+
+
+def lifespan(birth: FuzzyDate | None, has_death: bool, death: FuzzyDate | None,
+             living: bool) -> str:
+    """Годы жизни для карточки: «1849–?», «1804/05–1878», «>1800–1878», «1804–<1880», «2007–».
+
+    Смерть неизвестна: у живого пусто («2007–»), у остальных «?».
+    Если неизвестно вообще ничего — пустая строка.
+    """
+    start = birth.short() if birth else ""
+    if has_death:
+        end = death.short() if death else "?"
+    else:
+        end = "" if living else "?"
+    if not start and end in ("", "?") and not has_death:
+        return ""
+    return f"{start or '?'}–{end}"
 
 
 @dataclass
@@ -256,13 +285,14 @@ class Tree:
 def deletion_blockers(tree: Tree, pid: str) -> list[str]:
     """Почему человека нельзя удалить (пустой список = можно).
 
-    Правила: 1) у человека нет детей (древо от него не идёт вниз);
+    Правила: 1) человек на краю древа — выше (родителей) или ниже (детей)
+       никого нет; из середины линии удалять нельзя;
     2) после удаления не возникает островков — все остальные люди
        остаются связаны между собой.
     """
     reasons = []
-    if tree.children(pid):
-        reasons.append("у человека есть дети — от него продолжается древо")
+    if tree.parents(pid) and tree.children(pid):
+        reasons.append("у человека есть и родители, и дети — он в середине линии древа")
     rest = [p for p in tree.people if p != pid]
     if rest and len(tree.connected_from(rest[0], exclude=pid)) != len(rest):
         reasons.append("после удаления часть древа окажется оторванной (островок)")

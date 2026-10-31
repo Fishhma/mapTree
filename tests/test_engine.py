@@ -5,7 +5,8 @@ from pathlib import Path
 from tree_engine.gedcom import load, parse
 from tree_engine.generations import assign_generations
 from tree_engine.layout import CARD_W, compute_layout, count_crossings
-from tree_engine.model import Family, FuzzyDate, Person, Tree, deletion_blockers
+from tree_engine.model import Family, FuzzyDate, Person, Tree, deletion_blockers, lifespan
+from tree_engine.render_svg import rounded_path
 
 GED = Path(__file__).parent / "rootsmagic_tree.ged"   # личные данные — не в git!
 needs_ged = unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")
@@ -49,6 +50,25 @@ class FuzzyDateTest(unittest.TestCase):
         self.assertEqual(FuzzyDate("ABT 1850").short(), "~1850")
         self.assertEqual(FuzzyDate("BEF 1790").short(), "<1790")
         self.assertEqual(FuzzyDate("BET 1850 AND 1860").year, 1850)
+
+    def test_short_inexact_years(self):
+        cases = {"BET 1850 AND 1852": "1850-52", "BET 1799 AND 1801": "1799-1801",
+                 "BET 1 JAN 1850 AND 1852": "1850-52", "BEF 1850": "<1850", "AFT 1850": ">1850",
+                 "1850/51": "1850/51", "6 JAN 2007": "2007"}
+        for raw, expected in cases.items():
+            self.assertEqual(FuzzyDate(raw).short(), expected, raw)
+
+    def test_lifespan(self):
+        F = FuzzyDate
+        self.assertEqual(lifespan(F("1849"), False, None, False), "1849–?")
+        self.assertEqual(lifespan(F("2007"), False, None, True), "2007–")
+        self.assertEqual(lifespan(F("1804/05"), True, F("1878"), False), "1804/05–1878")
+        self.assertEqual(lifespan(F("AFT 1800"), True, F("1878"), False), ">1800–1878")
+        self.assertEqual(lifespan(F("BEF 1810"), True, F("1878"), False), "<1810–1878")
+        self.assertEqual(lifespan(F("1804"), True, F("BEF 1880"), False), "1804–<1880")
+        self.assertEqual(lifespan(F("1804"), True, F("AFT 1870"), False), "1804–>1870")
+        self.assertEqual(lifespan(None, True, None, False), "?–?")       # умер, даты нет
+        self.assertEqual(lifespan(None, False, None, False), "")         # ничего не известно
 
 
 @needs_ged
@@ -98,8 +118,13 @@ class GenerationsTest(unittest.TestCase):
 
 
 class DeletionTest(unittest.TestCase):
-    def test_person_with_children_cannot_be_deleted(self):
-        self.assertTrue(deletion_blockers(HANUS, "libor"))
+    def test_person_in_middle_of_line_cannot_be_deleted(self):
+        self.assertTrue(deletion_blockers(HANUS, "libor"))     # есть и отец, и дети
+
+    def test_top_ancestor_with_children_can_be_deleted(self):
+        t = build({"x": ("Дед", "M", None), "a": ("Сын", "M", None), "b": ("Дочь", "F", None)},
+                  [("f", ["x"], ["a", "b"])])
+        self.assertEqual(deletion_blockers(t, "x"), [])        # выше него никого нет
 
     def test_childless_one_of_several_children_can_be_deleted(self):
         self.assertEqual(deletion_blockers(HANUS, "uncle"), [])
@@ -115,7 +140,7 @@ class DeletionTest(unittest.TestCase):
                    "x": ("Дед", "M", None)},
                   [("fx", ["x"], ["p"]), ("f", ["p", "m"], ["c"])])
         self.assertEqual(deletion_blockers(t, "c"), [])   # родители связаны браком — ок
-        self.assertTrue(deletion_blockers(t, "p"))         # у него есть ребёнок
+        self.assertTrue(deletion_blockers(t, "p"))         # есть и отец, и ребёнок
 
 
 class LayoutTest(unittest.TestCase):
@@ -152,12 +177,21 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class RoundedPathTest(unittest.TestCase):
+    def test_corner_is_rounded_and_short_segments_shrink_radius(self):
+        d = rounded_path([(0, 0), (0, 10), (100, 10)], radius=12)
+        self.assertIn("Q 0.0 10.0", d)                 # скругление вокруг угла
+        self.assertIn("L 0.0 5.0", d)                  # радиус урезан до половины отрезка
+        self.assertEqual(rounded_path([(0, 0), (0, 50)]), "M 0.0 0.0 L 0.0 50.0")
+
+
 class UserDateInputTest(unittest.TestCase):
     def test_normalize(self):
         from tree_engine.model import normalize_date
         cases = {"10.08.1962": "10 AUG 1962", "8.1962": "AUG 1962", "1962": "1962",
                  "около 1850": "ABT 1850", "до 1790": "BEF 1790", "после 1900": "AFT 1900",
-                 "1850-1860": "BET 1850 AND 1860", "6 jan 2007": "6 JAN 2007", "весна 1945": "весна 1945"}
+                 "1850-1860": "BET 1850 AND 1860", "6 jan 2007": "6 JAN 2007", "весна 1945": "весна 1945",
+                 "1850-52": "BET 1850 AND 1852", "1850/51": "1850/51", "1850/1851": "1850/51"}
         for given, expected in cases.items():
             self.assertEqual(normalize_date(given), expected, given)
 
@@ -167,5 +201,6 @@ class UserDateInputTest(unittest.TestCase):
 
     def test_round_trip_to_user_format(self):
         from tree_engine.model import normalize_date, to_user_date
-        for text in ["10.08.1962", "08.1962", "1962", "около 1850", "до 1790", "между 1850 и 1860", "весна 1945"]:
+        for text in ["10.08.1962", "08.1962", "1962", "около 1850", "до 1790", "между 1850 и 1860", "весна 1945",
+                     "1850/51"]:
             self.assertEqual(to_user_date(normalize_date(text)), text)

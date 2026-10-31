@@ -406,14 +406,12 @@ class _Engine:
             else:
                 lines.append(Line("marriage", [(pts[0], bottoms[0]), (pts[0], jy)], fid))
             if fam.children:
+                # К каждому ребёнку — сплошная ломаная «союз → шина → ребёнок», чтобы
+                # углы можно было скруглить; у братьев и сестёр участки шины совпадают.
                 bus_y = jy + 14 + bus_track.get(fid, 0) * TRACK_DY
-                xs = [boxes[c].x for c in fam.children]
-                lines.append(Line("descent", [(ux, jy), (ux, bus_y)], fid))
-                lo, hi = min(xs + [ux]), max(xs + [ux])
-                if hi > lo:
-                    lines.append(Line("descent", [(lo, bus_y), (hi, bus_y)], fid))
                 for c in fam.children:
-                    lines.append(Line("descent", [(boxes[c].x, bus_y), (boxes[c].x, boxes[c].y)], fid))
+                    cx = boxes[c].x
+                    lines.append(Line("descent", [(ux, jy), (ux, bus_y), (cx, bus_y), (cx, boxes[c].y)], fid))
 
         width = max(b.left + b.width for bl in self.layers.values() for b in bl) + 40
         height = y + 20

@@ -157,6 +157,7 @@ body.panel-open .stats { display: none; }
   display: grid; gap: 6px; font-size: 14px; }
 .f-unions legend { padding: 0 4px; font-size: 13px; color: var(--muted); }
 .f-unions label { cursor: pointer; }
+.f-check { font-size: 14px; cursor: pointer; }
 .f-hint { margin: 0; font-size: 13px; color: var(--muted); }
 .f-error { margin: 0; font-size: 14px; color: #a2283f; }
 .p-actions .primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }

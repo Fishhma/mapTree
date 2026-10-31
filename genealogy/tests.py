@@ -159,7 +159,8 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
         self.assertEqual(Place.objects.count(), 1)                 # место не задвоилось
 
     def test_child_without_family_gets_union_with_unknown_partner(self):
-        kid = self.new_person(self.add(self.marian, "child"))
+        kid = self.new_person(self.add(self.marian, "child", is_living="on"))
+        self.assertTrue(kid.is_living)
         fam = kid.parent_family
         self.assertEqual((fam.partner1, fam.partner2), (self.marian, None))
 
@@ -216,15 +217,15 @@ class PersonPageTest(SmallTreeMixin, TestCase):
     def url(self, person):
         return f"/people/{person.code}/"
 
-    def save(self, person, **fields):
+    def save(self, person, follow=False, **fields):
         data = {"given_name": person.given_name, "sex": person.sex, **fields}
-        return self.client.post(self.url(person), data)
+        return self.client.post(self.url(person), data, follow=follow)
 
     def test_page_shows_person_and_family(self):
         r = self.client.get(self.url(self.libor))
         self.assertContains(r, "Libor")
         self.assertContains(r, self.url(self.marian))              # ссылка на ребёнка
-        self.assertContains(r, "Удалить нельзя")                    # у Libor есть дети
+        self.assertContains(r, "Удалить нельзя")                    # у Libor есть и отец, и дети
         self.assertEqual(self.client.get("/people/P9999/").status_code, 404)
 
     def test_marian_birth_date_shown_in_user_format(self):
@@ -249,6 +250,30 @@ class PersonPageTest(SmallTreeMixin, TestCase):
         Event.objects.filter(person=self.ondrej, kind="BIRT").update(description="в роддоме")
         self.save(self.ondrej)
         self.assertEqual(self.ondrej.events.get(kind="BIRT").date, "")
+
+    def test_save_without_changes_says_so(self):
+        r = self.client.get(self.url(self.marian))
+        form, events = r.context["form"], r.context["events_form"]
+        data = {k: v for k, v in {**form.initial, **{n: f.initial for n, f in events.fields.items()}}.items()
+                if v not in (None, False)}
+        r = self.client.post(self.url(self.marian), data, follow=True)
+        self.assertContains(r, "Изменений нет")
+        r = self.save(self.marian, given_name="Мариан", BIRT_date="06.01.2007", BIRT_place="", follow=True)
+        self.assertContains(r, "Изменения сохранены")
+
+    def test_living_flag_changes_years(self):
+        self.save(self.ondrej, BIRT_date="1986", is_living="on")
+        self.assertEqual(self.client.get(f"/api/people/{self.ondrej.pk}/").json()["years"], "1986–")
+        self.save(self.ondrej, BIRT_date="1986")
+        self.assertEqual(self.client.get(f"/api/people/{self.ondrej.pk}/").json()["years"], "1986–?")
+
+    def test_top_ancestor_can_be_deleted(self):
+        r = self.client.get(self.url(self.ded))
+        self.assertNotContains(r, "Удалить нельзя")
+        self.client.post(self.url(self.ded), {"action": "delete", "confirm_code": self.ded.code})
+        self.assertFalse(Person.objects.filter(pk=self.ded.pk).exists())
+        libor = Person.objects.get(pk=self.libor.pk)
+        self.assertEqual(libor.parent_family_id, self.uncle.parent_family_id)   # братья остались братьями
 
     def test_delete_needs_exact_code(self):
         r = self.client.post(self.url(self.uncle), {"action": "delete", "confirm_code": "P0000"})
