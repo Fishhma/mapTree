@@ -50,7 +50,9 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
 
     child   — в семью `family_id` (союз этого человека) или в новую семью,
               где второй родитель неизвестен;
-    spouse  — новая семья (повторный брак — просто ещё одна семья);
+    spouse  — на пустое место в семье `family_id` (у детей этого человека второй
+              родитель был неизвестен — новый супруг становится их родителем)
+              или новая семья (повторный брак — просто ещё одна семья);
     parent  — на свободное место в семье родителей (создаётся, если её нет);
     sibling — в семью родителей (если родители неизвестны — семья без партнёров).
     """
@@ -60,10 +62,12 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
     if relation == "parent" and parents and parents.partner1_id and parents.partner2_id:
         raise EditError("У человека уже указаны оба родителя.")
     family = None
-    if relation == "child" and family_id:
+    if relation in ("child", "spouse") and family_id:
         family = person.families.filter(pk=family_id).first()
         if family is None:
             raise EditError("Этот союз не относится к выбранному человеку.")
+        if relation == "spouse" and family.partner1_id and family.partner2_id:
+            raise EditError("У этой семьи уже указаны оба родителя.")
 
     new = _create_person(data)
 
@@ -71,7 +75,14 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
         new.parent_family = family or Family.objects.create(partner1=person)
         new.save(update_fields=["parent_family"])
     elif relation == "spouse":
-        Family.objects.create(partner1=person, partner2=new)
+        if family is None:
+            Family.objects.create(partner1=person, partner2=new)
+        elif family.partner1_id:
+            family.partner2 = new
+            family.save(update_fields=["partner2"])
+        else:
+            family.partner1 = new
+            family.save(update_fields=["partner1"])
     elif relation == "parent":
         if parents is None:
             person.parent_family = Family.objects.create(partner1=new)

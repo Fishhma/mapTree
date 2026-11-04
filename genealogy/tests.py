@@ -176,6 +176,41 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
         self.assertEqual(self.libor.families.count(), 3)
         self.assertTrue(wife.families.filter(partner1=self.libor).exists())
 
+    def test_spouse_becomes_other_parent_of_children(self):
+        # Случай Maňas: у Josef дочь, мать неизвестна; добавляем жену как её мать.
+        josef, renata = Person.objects.create(given_name="Josef"), Person.objects.create(given_name="Renata")
+        fam = family(josef, None, [renata])
+        tatana = self.new_person(self.add(josef, "spouse", family=fam.pk, given_name="Taťána", sex="F"))
+        fam.refresh_from_db()
+        self.assertEqual((fam.partner1, fam.partner2), (josef, tatana))
+        self.assertEqual(josef.families.count(), 1)                # новой семьи не появилось
+        tree = self.client.get("/api/tree/").json()
+        self.assertEqual(sorted(tree["families"][str(fam.pk)]["partners"]), sorted([str(josef.pk), str(tatana.pk)]))
+        self.assertEqual(tree["families"][str(fam.pk)]["children"], [str(renata.pk)])
+
+    def test_spouse_fills_first_slot_if_person_is_second(self):
+        mother, kid = Person.objects.create(given_name="Мать"), Person.objects.create(given_name="Ребёнок")
+        fam = family(None, mother, [kid])
+        father = self.new_person(self.add(mother, "spouse", family=fam.pk))
+        fam.refresh_from_db()
+        self.assertEqual((fam.partner1, fam.partner2), (father, mother))
+
+    def test_spouse_as_new_marriage_when_family_not_chosen(self):
+        josef, renata = Person.objects.create(given_name="Josef"), Person.objects.create(given_name="Renata")
+        fam = family(josef, None, [renata])
+        self.new_person(self.add(josef, "spouse", family=""))
+        self.assertEqual(josef.families.count(), 2)
+        fam.refresh_from_db()
+        self.assertIsNone(fam.partner2)                            # у дочери мать по-прежнему неизвестна
+
+    def test_spouse_into_full_or_foreign_family_is_refused(self):
+        count = Person.objects.count()
+        full = Family.objects.get(partner1=self.libor, partner2=self.julia)
+        self.assertEqual(self.add(self.libor, "spouse", family=full.pk).status_code, 400)
+        foreign = Family.objects.get(partner1=self.ded)
+        self.assertEqual(self.add(self.libor, "spouse", family=foreign.pk).status_code, 400)
+        self.assertEqual(Person.objects.count(), count)            # ничего не создано
+
     def test_parent_fills_free_slot_then_refuses(self):
         babka = self.new_person(self.add(self.libor, "parent", given_name="Бабка", sex="F"))
         fam = Person.objects.get(pk=self.libor.pk).parent_family

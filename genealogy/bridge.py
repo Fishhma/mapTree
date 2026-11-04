@@ -63,7 +63,8 @@ def tree_payload() -> dict:
         }
     return {
         "people": people,
-        "families": {fid: {"partners": f.partners} for fid, f in tree.families.items()},
+        "families": {fid: {"partners": f.partners, "children": f.children}
+                     for fid, f in tree.families.items()},
         "boxes": [{"id": b.pid, "x": round(b.x, 1), "y": round(b.y, 1), "gen": b.gen}
                   for b in layout.boxes.values()],
         "unions": [{"id": u.fid, "x": round(u.x, 1), "y": round(u.y, 1)}

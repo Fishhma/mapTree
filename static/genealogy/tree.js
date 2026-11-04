@@ -385,6 +385,21 @@ function unionChoices(id) {
   return choices;
 }
 
+// Для супруга: семьи этого человека с детьми, где второй родитель неизвестен.
+// Новый супруг может встать на это место — тогда он родитель этих детей.
+function spouseChoices(id) {
+  const kids = (fid) => data.families[fid].children.map((c) => fullName(data.people[c]));
+  const choices = data.people[id].families
+    .filter((fid) => data.families[fid].partners.length === 1 && data.families[fid].children.length)
+    .map((fid) => {
+      const names = kids(fid);
+      const shown = names.length > 3 ? `${names.slice(0, 3).join(", ")} и ещё ${names.length - 3}` : names.join(", ");
+      return { value: fid, label: `Второй родитель детей: ${shown}` };
+    });
+  if (choices.length) choices.push({ value: "", label: "Новый брак (без общих детей)" });
+  return choices;
+}
+
 function showAddForm(id, relation) {
   selected = id;
   highlight(id);
@@ -394,11 +409,19 @@ function showAddForm(id, relation) {
   const error = h("p", { class: "f-error", role: "alert", hidden: true });
   const save = h("button", { type: "submit", class: "primary" }, "Сохранить");
 
-  const unions = relation === "child"
-    ? h("fieldset", { class: "f-unions" }, h("legend", {}, "Второй родитель"),
+  let unions = null;
+  if (relation === "child") {
+    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, "Второй родитель"),
       unionChoices(id).map((c, i) => h("label", {},
-        h("input", { type: "radio", name: "family", value: c.value, checked: i === 0 }), " ", c.label)))
-    : null;
+        h("input", { type: "radio", name: "family", value: c.value, checked: i === 0 }), " ", c.label)));
+  }
+  const spouseOptions = relation === "spouse" ? spouseChoices(id) : [];
+  if (spouseOptions.length) {
+    // Без выбора по умолчанию: ошибиться здесь — значит молча сделать человека не тем родителем.
+    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, "Кем приходится новый супруг(а)"),
+      spouseOptions.map((c) => h("label", {},
+        h("input", { type: "radio", name: "family", value: c.value }), " ", c.label)));
+  }
 
   const form = h("form", { class: "add-form", novalidate: true },
     unions,
@@ -422,6 +445,11 @@ function showAddForm(id, relation) {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(form));
     body.relation = relation;
+    if (spouseOptions.length && !("family" in body)) {
+      error.textContent = "Выберите, кем приходится новый супруг(а).";
+      error.hidden = false;
+      return;
+    }
     save.disabled = true;
     error.hidden = true;
     try {
