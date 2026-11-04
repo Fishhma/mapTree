@@ -214,18 +214,32 @@ class _Engine:
             return None
         return sum(votes) / len(votes)
 
+    def _female_left(self, block: _Block) -> int:
+        """Сколько пар соседей-супругов стоят «жена слева, муж справа» (правило: муж слева)."""
+        p, n = self.t.people, 0
+        for a, b in zip(block.members, block.members[1:]):
+            if p[a].sex == "F" and p[b].sex == "M" and b in self.t.spouses(a):
+                n += 1
+        return n
+
     def _orient(self, block: _Block) -> None:
-        """Разворачиваем блок, если так супруги ближе к своим родителям."""
+        """Разворачиваем блок: сначала правило «муж слева», затем — чтобы супруги были ближе к своим родителям.
+
+        В цепочке повторных браков правило выполнимо не для всех пар (у мужа с двумя
+        жёнами одна всегда слева) — берётся порядок с меньшим числом нарушений.
+        Позже _transpose может развернуть блок вопреки правилу, но только если так
+        становится меньше пересечений: пересечения важнее.
+        """
         if len(block.members) < 2:
             return
 
-        def cost() -> float:
+        def cost() -> tuple[int, float]:
             c = 0.0
             for m in block.members:
                 fid = self.t.people[m].parent_family
                 if fid and self.t.families[fid].partners:
                     c += abs(self.x(m) - self.union_x(fid))
-            return c
+            return self._female_left(block), c
         before = cost()
         block.members.reverse()
         if cost() >= before:

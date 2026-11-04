@@ -192,6 +192,23 @@ class LayoutTest(unittest.TestCase):
         self.assertNotIn("old", lay.unions)
         self.assertFalse([ln for ln in lay.lines if ln.fid == "old"])
 
+    def test_husband_left_of_wife(self):
+        # Жена «тянется» к своим родителям, но правило «муж слева» важнее.
+        t = build({"wf": ("Её отец", "M", None), "wm": ("Её мать", "F", None),
+                   "h": ("Муж", "M", None), "w": ("Жена", "F", None), "k": ("Сын", "M", None)},
+                  [("wp", ["wf", "wm"], ["w"]), ("fam", ["h", "w"], ["k"])])
+        lay = compute_layout(t, "k")
+        self.assertLess(lay.boxes["h"].x, lay.boxes["w"].x)
+
+    def test_husband_with_two_wives_is_in_the_middle(self):
+        # Исключение: у мужа с двумя жёнами одна неизбежно слева.
+        t = build({"h": ("Муж", "M", None), "w1": ("Жена 1", "F", None), "w2": ("Жена 2", "F", None),
+                   "a": ("A", "M", None), "b": ("B", "F", None)},
+                  [("f1", ["h", "w1"], ["a"]), ("f2", ["h", "w2"], ["b"])])
+        lay = compute_layout(t, "a")
+        xs = sorted(["h", "w1", "w2"], key=lambda p: lay.boxes[p].x)
+        self.assertEqual(xs[1], "h")
+
     def test_rounded_path_drops_points_on_straight_line(self):
         self.assertEqual(rounded_path([(5, 0), (5, 10), (5, 10), (5, 40)]), "M 5.0 0.0 L 5.0 40.0")
 
@@ -213,6 +230,12 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(len(layout.rows), 9)
         self.check_no_overlap(tree, layout)
         self.assertLessEqual(count_crossings(tree, layout), 5)   # защита от регрессии
+        female_left = 0
+        for fam in tree.families.values():
+            if len(fam.partners) == 2:
+                left, right = sorted(fam.partners, key=lambda p: layout.boxes[p].x)
+                female_left += tree.people[left].sex == "F" and tree.people[right].sex == "M"
+        self.assertLessEqual(female_left, 7)   # «муж слева»; исключения — цепочки браков (было 15)
 
 
 if __name__ == "__main__":
