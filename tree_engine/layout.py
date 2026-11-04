@@ -394,8 +394,8 @@ class _Engine:
         unions: dict[str, Union] = {}
         lines: list[Line] = []
         for fid, fam in self.t.families.items():
-            if not fam.partners:
-                continue
+            if not fam.partners or (len(fam.partners) == 1 and not fam.children):
+                continue          # одинокий партнёр без детей — не брак, рисовать нечего
             pts = self.attach_points(fid)
             bottoms = [boxes[p].y + CARD_H for p in fam.partners]
             jy = max(bottoms) + RAIL_DY

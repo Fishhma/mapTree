@@ -84,13 +84,26 @@ class DeletionTest(SmallTreeMixin, TestCase):
         self.client.post(url, {"post": "yes"})                        # 2-е подтверждение
         self.assertFalse(Person.objects.filter(pk=self.uncle.pk).exists())
 
-    def test_empty_family_removed_after_deleting_childless_partner(self):
+    def test_hollow_family_removed_after_deleting_childless_partner(self):
+        # Случай Josef Maňas: удалили бездетную жену — от брака не должен остаться отросток.
         lone = Person.objects.create(given_name="Бездетная")
         fam = family(self.uncle, lone)
         lone.delete()
-        self.assertTrue(Family.objects.filter(pk=fam.pk).exists())   # дядя остался в семье
-        self.uncle.delete()
-        self.assertFalse(Family.objects.filter(pk=fam.pk).exists())  # семья опустела — удалена
+        self.assertFalse(Family.objects.filter(pk=fam.pk).exists())
+
+    def test_family_with_children_survives_partner_deletion(self):
+        ded_family = self.libor.parent_family
+        self.ded.delete()                                            # родоначальник: выше никого
+        ded_family.refresh_from_db()
+        self.assertEqual(ded_family.children.count(), 2)            # Libor и дядя остались братьями
+
+    def test_migration_cleanup_function_removes_only_hollow_families(self):
+        from .signals import drop_hollow_families
+        hollow = family(self.uncle)                                 # один партнёр, без детей
+        kept = family(self.uncle, None, [Person.objects.create()])  # один партнёр, но есть ребёнок
+        self.assertEqual(drop_hollow_families(), 1)
+        self.assertFalse(Family.objects.filter(pk=hollow.pk).exists())
+        self.assertTrue(Family.objects.filter(pk=kept.pk).exists())
 
     def test_admin_pages_open(self):
         for url in ["/admin/", "/admin/genealogy/person/", f"/admin/genealogy/person/{self.libor.pk}/change/",

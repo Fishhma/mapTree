@@ -185,6 +185,13 @@ class LayoutTest(unittest.TestCase):
         self.assertTrue(abs(lay.boxes["c"].x - lay.unions["fam"].x) <= 24)
         self.assertEqual({x for x, _ in path}, {lay.unions["fam"].x})   # вертикаль без ступеньки
 
+    def test_lonely_partner_without_children_draws_nothing(self):
+        t = build({"j": ("Josef", "M", None), "r": ("Renata", "F", None), "t": ("Taťána", "F", None)},
+                  [("old", ["j"], []), ("fam", ["j", "t"], ["r"])])
+        lay = compute_layout(t, "r")
+        self.assertNotIn("old", lay.unions)
+        self.assertFalse([ln for ln in lay.lines if ln.fid == "old"])
+
     def test_rounded_path_drops_points_on_straight_line(self):
         self.assertEqual(rounded_path([(5, 0), (5, 10), (5, 10), (5, 40)]), "M 5.0 0.0 L 5.0 40.0")
 
