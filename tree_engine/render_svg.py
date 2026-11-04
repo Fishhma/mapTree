@@ -33,6 +33,9 @@ def rounded_path(points: list[tuple[float, float]], radius: float = 12) -> str:
     Радиус уменьшается на коротких отрезках, чтобы скругление не «съело» отрезок.
     """
     pts = [p for i, p in enumerate(points) if i == 0 or p != points[i - 1]]
+    pts = [p for i, p in enumerate(pts)                      # точки посреди прямого отрезка не нужны
+           if i in (0, len(pts) - 1)
+           or not (pts[i - 1][0] == p[0] == pts[i + 1][0] or pts[i - 1][1] == p[1] == pts[i + 1][1])]
     if len(pts) < 3:
         return "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
     d = [f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"]

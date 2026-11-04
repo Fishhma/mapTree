@@ -27,6 +27,7 @@ FAMILY_GAP = 72      # между неродственными блоками
 RAIL_DY = 14         # от низа карточки до линии брака
 TRACK_DY = 9         # шаг дорожек шин
 GAP_BASE = 46        # минимальный зазор между рядами (без дорожек)
+SNAP_DX = 24         # ребёнок почти под точкой брака: линия входит в карточку не по центру, зато прямая
 ITERATIONS = 40
 
 
@@ -406,12 +407,17 @@ class _Engine:
             else:
                 lines.append(Line("marriage", [(pts[0], bottoms[0]), (pts[0], jy)], fid))
             if fam.children:
-                # К каждому ребёнку — сплошная ломаная «союз → шина → ребёнок», чтобы
-                # углы можно было скруглить; у братьев и сестёр участки шины совпадают.
+                # Ствол от точки брака вниз до шины, от шины — ветка к каждому ребёнку
+                # (скругляется только поворот к ребёнку). Один ребёнок — одна ломаная.
                 bus_y = jy + 14 + bus_track.get(fid, 0) * TRACK_DY
-                for c in fam.children:
-                    cx = boxes[c].x
+                drops = [(c, ux if abs(boxes[c].x - ux) <= SNAP_DX else boxes[c].x) for c in fam.children]
+                if len(drops) == 1:
+                    (c, cx), = drops
                     lines.append(Line("descent", [(ux, jy), (ux, bus_y), (cx, bus_y), (cx, boxes[c].y)], fid))
+                else:
+                    lines.append(Line("descent", [(ux, jy), (ux, bus_y)], fid))
+                    for c, cx in drops:
+                        lines.append(Line("descent", [(ux, bus_y), (cx, bus_y), (cx, boxes[c].y)], fid))
 
         width = max(b.left + b.width for bl in self.layers.values() for b in bl) + 40
         height = y + 20

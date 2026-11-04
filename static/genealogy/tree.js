@@ -113,6 +113,7 @@ function draw() {
 function apply() {
   world.setAttribute("transform", `translate(${view.x} ${view.y}) scale(${view.k})`);
   ruler.replaceChildren();
+  if (!data) return;            // окно изменило размер, пока древо ещё грузится
   const H = data.card.h;
   for (const r of data.rows) {
     const y = view.y + (r.y + H / 2) * view.k;

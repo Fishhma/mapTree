@@ -162,6 +162,32 @@ class LayoutTest(unittest.TestCase):
             for a, b in zip(xs, xs[1:]):
                 self.assertGreaterEqual(b - a, CARD_W)
 
+    def test_lines_start_from_union_point(self):
+        # Один ствол от точки брака, от шины — ветки к детям; каждая ветка начинается на стволе.
+        t = build({"f": ("Отец", "M", None), "m": ("Мать", "F", None),
+                   "a": ("A", "M", None), "b": ("B", "F", None), "c": ("C", "M", None)},
+                  [("fam", ["f", "m"], ["a", "b", "c"])])
+        lay = compute_layout(t, "a")
+        u = lay.unions["fam"]
+        descents = [ln.points for ln in lay.lines if ln.kind == "descent"]
+        trunks = [p for p in descents if p[0] == (u.x, u.y)]
+        self.assertEqual(len(trunks), 1)
+        bus_y = trunks[0][-1][1]
+        self.assertEqual(len(descents), 4)
+        for p in descents:
+            if p is not trunks[0]:
+                self.assertEqual(p[0], (u.x, bus_y))
+
+    def test_only_child_almost_under_union_gets_straight_line(self):
+        t = build({"p": ("Отец", "M", None), "c": ("Сын", "M", None)}, [("fam", ["p"], ["c"])])
+        lay = compute_layout(t, "c")
+        (path,) = [ln.points for ln in lay.lines if ln.kind == "descent"]
+        self.assertTrue(abs(lay.boxes["c"].x - lay.unions["fam"].x) <= 24)
+        self.assertEqual({x for x, _ in path}, {lay.unions["fam"].x})   # вертикаль без ступеньки
+
+    def test_rounded_path_drops_points_on_straight_line(self):
+        self.assertEqual(rounded_path([(5, 0), (5, 10), (5, 10), (5, 40)]), "M 5.0 0.0 L 5.0 40.0")
+
     def test_second_marriage_layout(self):
         layout = compute_layout(HANUS, "marian")
         self.check_no_overlap(HANUS, layout)
