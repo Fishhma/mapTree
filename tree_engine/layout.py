@@ -29,6 +29,12 @@ TRACK_DY = 9         # шаг дорожек шин
 GAP_BASE = 46        # минимальный зазор между рядами (без дорожек)
 SNAP_DX = 24         # ребёнок почти под точкой брака: линия входит в карточку не по центру, зато прямая
 ITERATIONS = 40
+STRAIGHTEN_SWEEPS = 30
+STRAIGHTEN_ROUNDS = 10
+SWAP_GAIN = 20       # перестановка ради длины линий — только при заметном выигрыше, px
+W_DOWN = 1.0         # вес «ребёнок под точкой брака»
+W_UP = 1.1           # вес «точка брака над центром детей» (чуть больше: при равенстве родители встают над детьми)
+W_SPAN = 0.2         # поджатие: штраф за ширину ряда (меньше, чем за изгиб линии)
 
 
 @dataclass
@@ -95,6 +101,45 @@ def _isotonic(targets: list[float], weights: list[float]) -> list[float]:
     out = []
     for s, w, n in blocks:
         out += [s / w] * n
+    return out
+
+
+def _weighted_median(points: list[tuple[float, float]]) -> float:
+    """Точка, где сумма w·|x − v| минимальна. Если таких точек отрезок — его середина."""
+    pts = sorted(points)
+    half = sum(w for _, w in pts) / 2
+    acc, lo = 0.0, None
+    for v, w in pts:
+        acc += w
+        if lo is None and acc >= half - 1e-9:
+            lo = v
+            if acc > half + 1e-9:
+                return v
+            continue
+        if lo is not None:
+            return (lo + v) / 2
+    return pts[-1][0]
+
+
+def _isotonic_l1(groups: list[list[tuple[float, float]]]) -> list[float]:
+    """Изотоническая регрессия по сумме модулей (PAV с взвешенной медианой).
+
+    groups[i] — «пожелания» i-го элемента: пары (значение, вес). Результат неубывающий
+    и минимизирует сумму w·|y_i − v|. В отличие от квадратов, модули не усредняют
+    противоречивые пожелания, а выполняют более весомые точно: линия получается прямой,
+    а не «чуть кривой с обеих сторон».
+    """
+    pools: list[list] = []   # [точки, медиана, кол-во]
+    for pts in groups:
+        pools.append([list(pts), _weighted_median(pts), 1])
+        while len(pools) > 1 and pools[-2][1] > pools[-1][1]:
+            pts2, _, n = pools.pop()
+            pools[-1][0] += pts2
+            pools[-1][2] += n
+            pools[-1][1] = _weighted_median(pools[-1][0])
+    out = []
+    for _, m, n in pools:
+        out += [m] * n
     return out
 
 
@@ -267,6 +312,208 @@ class _Engine:
         for b, y, o in zip(blocks, ys, offsets):
             b.left = y + o
 
+    # ---------- финальная подгонка: прямые и короткие линии ----------
+    #
+    # «Длина изгибов» E = Σ по семьям: W_DOWN·Σ|x ребёнка − x союза| + W_UP·|x союза − центр детей|.
+    # Порядок карточек уже выбран (пересечения), здесь двигаем только координаты.
+
+    def _own_unions(self, block: _Block) -> list[str]:
+        """Семьи с детьми, оба (или единственный) родителя которых в этом блоке."""
+        out = []
+        for m in block.members:
+            for fid in self.t.people[m].families:
+                fam = self.t.families[fid]
+                if fam.children and fid not in out and all(self.block_of[p] is block for p in fam.partners):
+                    out.append(fid)
+        return out
+
+    def _energy(self, blocks: list[_Block] | None = None) -> float:
+        """E целиком или только слагаемые, которые меняются при сдвиге блоков `blocks`."""
+        if blocks is None:
+            fids, rows = self.t.families, self.layers
+        else:
+            fids, rows = set(), {b.layer for b in blocks}
+            for b in blocks:
+                for m in b.members:
+                    fids.update(self.t.people[m].families)
+                    fids.add(self.t.people[m].parent_family)
+            fids.discard(None)
+        e = 0.0
+        for fid in fids:
+            fam = self.t.families[fid]
+            if not fam.partners or not fam.children:
+                continue
+            u = self.union_x(fid)
+            xs = [self.x(c) for c in fam.children]
+            e += W_DOWN * sum(abs(x - u) for x in xs)
+            if len({self.block_of[p] for p in fam.partners}) == 1:
+                e += W_UP * abs(u - (min(xs) + max(xs)) / 2)
+        for L in rows:
+            row = self.layers[L]
+            e += W_SPAN * (row[-1].left + row[-1].width - row[0].left)
+        return e
+
+    def _anchors(self, block: _Block) -> list[tuple[float, float]]:
+        """Слагаемые E, зависящие от блока: куда поставить левый край, чтобы слагаемое стало 0, и вес."""
+        out: list[tuple[float, float]] = []
+        for m in block.members:
+            fid = self.t.people[m].parent_family     # ребёнок — под точкой брака родителей
+            if fid and self.t.families[fid].partners:
+                u, off = self.union_x(fid), block.offset(m)
+                out.append((u - off, W_DOWN))
+                fam = self.t.families[fid]
+                if len({self.block_of[p] for p in fam.partners}) == 1:
+                    # крайний ребёнок сдвигает центр детей на половину своего сдвига
+                    xs = [self.x(c) for c in fam.children]
+                    lo, hi = min(xs), max(xs)
+                    if lo == hi:
+                        out.append((u - off, W_UP))
+                    elif self.x(m) == lo:
+                        out.append((2 * u - hi - off, W_UP / 2))
+                    elif self.x(m) == hi:
+                        out.append((2 * u - lo - off, W_UP / 2))
+        for fid in self._own_unions(block):          # точка брака — над своими детьми
+            rel = self.union_x(fid) - block.left
+            xs = [self.x(c) for c in self.t.families[fid].children]
+            out += [(x - rel, W_DOWN) for x in xs]
+            out.append(((min(xs) + max(xs)) / 2 - rel, W_UP))
+        row = self.layers[block.layer]                # крайние блоки ряда тянутся к соседу
+        if len(row) > 1 and block is row[0]:
+            out.append((row[1].left - self._gap(block, row[1]) - block.width, W_SPAN))
+        if len(row) > 1 and block is row[-1]:
+            out.append((row[-2].left + row[-2].width + self._gap(row[-2], block), W_SPAN))
+        if not out:                                   # без пожеланий блок остаётся на месте
+            out.append((block.left, 1.0))
+        return out
+
+    def _offsets(self, blocks: list[_Block]) -> list[float]:
+        offsets, acc = [], 0.0
+        for i, b in enumerate(blocks):
+            offsets.append(acc)
+            acc += b.width + (self._gap(b, blocks[i + 1]) if i + 1 < len(blocks) else 0)
+        return offsets
+
+    def _straighten_layer(self, layer: int) -> None:
+        blocks = self.layers[layer]
+        offsets = self._offsets(blocks)
+        groups = [[(v - o, w) for v, w in self._anchors(b)] for b, o in zip(blocks, offsets)]
+        for b, y, o in zip(blocks, _isotonic_l1(groups), offsets):
+            b.left = y + o
+
+    def _move_clusters(self, glue_rows: bool) -> bool:
+        """Сдвиг целых «вертикальных цепочек»: блоки, связанные уже прямыми линиями.
+
+        Поблочная подгонка не сдвинет ребёнка, стоящего ровно под родителями, даже если
+        вся цепочка «родители — ребёнок — внуки» выиграла бы от сдвига вместе.
+        """
+        by_id = {id(b): b for bl in self.layers.values() for b in bl}
+        root = {k: k for k in by_id}
+
+        def find(k: int) -> int:
+            while root[k] != k:
+                root[k] = root[root[k]]
+                k = root[k]
+            return k
+        for bl in self.layers.values():
+            for b in bl:
+                for fid in self._own_unions(b):
+                    u = self.union_x(fid)
+                    for c in self.t.families[fid].children:
+                        if abs(self.x(c) - u) < 0.5:
+                            root[find(id(b))] = find(id(self.block_of[c]))
+        for bl in self.layers.values() if glue_rows else ():
+            for a, c in zip(bl, bl[1:]):
+                if c.left - a.left - a.width - self._gap(a, c) < 0.5:
+                    root[find(id(a))] = find(id(c))
+        clusters: dict[int, list[_Block]] = {}
+        for k, b in by_id.items():
+            clusters.setdefault(find(k), []).append(b)
+
+        moved = False
+        for members in clusters.values():
+            inside = {id(b) for b in members}
+            lo, hi = -float("inf"), float("inf")
+            for b in members:
+                row = self.layers[b.layer]
+                i = row.index(b)
+                if i > 0 and id(row[i - 1]) not in inside:
+                    a = row[i - 1]
+                    lo = max(lo, a.left + a.width + self._gap(a, b) - b.left)
+                if i + 1 < len(row) and id(row[i + 1]) not in inside:
+                    c = row[i + 1]
+                    hi = min(hi, c.left - self._gap(b, c) - b.width - b.left)
+            if hi - lo < 0.5:
+                continue
+            cands = {min(max(v - b.left, lo), hi) for b in members for v, _ in self._anchors(b)}
+            best, best_d = self._energy(members), 0.0
+            for d in sorted(cands, key=abs):
+                if abs(d) < 0.5:
+                    continue
+                for b in members:
+                    b.left += d
+                e = self._energy(members)
+                for b in members:
+                    b.left -= d
+                if e < best - 0.5:
+                    best, best_d = e, d
+            if best_d:
+                for b in members:
+                    b.left += best_d
+                moved = True
+        return moved
+
+    def _shorten_by_swaps(self, layer: int) -> bool:
+        """Перестановка соседних блоков ряда, если линии становятся короче, а пересечений не больше.
+
+        Пример: у пяти братьев сын крайнего левого стоит далеко справа — брат «переезжает»
+        вправо, и линия к сыну укорачивается. Поиск пересечений этого не видит: их тут нет.
+        """
+        blocks, moved = self.layers[layer], False
+        for i in range(len(blocks) - 1):
+            a, b = blocks[i], blocks[i + 1]
+            crossings, energy = self._layer_crossings(layer), self._energy([a, b])
+            la, lb = a.left, b.left
+            blocks[i], blocks[i + 1] = b, a
+            b.left = la                                  # пара занимает то же место
+            a.left = lb + b.width - a.width
+            if (self._layer_crossings(layer) <= crossings
+                    and self._energy([a, b]) < energy - SWAP_GAIN):
+                moved = True
+            else:
+                blocks[i], blocks[i + 1] = a, b
+                a.left, b.left = la, lb
+        return moved
+
+    def _straighten(self) -> None:
+        """Финальная подгонка: как можно больше прямых и коротких линий.
+
+        Пересечений не добавляет: блоки двигаются внутри ряда, а соседние меняются
+        местами, только если пересечений не становится больше.
+        """
+        layers = sorted(self.layers)
+
+        def sweeps() -> None:
+            for _ in range(STRAIGHTEN_SWEEPS):
+                before = [b.left for L in layers for b in self.layers[L]]
+                for L in layers:
+                    self._straighten_layer(L)
+                for L in reversed(layers):
+                    self._straighten_layer(L)
+                after = [b.left for L in layers for b in self.layers[L]]
+                if all(abs(a - b) < 0.5 for a, b in zip(before, after)):
+                    break
+        for _ in range(STRAIGHTEN_ROUNDS):
+            sweeps()
+            moved = False
+            for L in layers:
+                moved |= self._shorten_by_swaps(L)
+            moved |= self._move_clusters(glue_rows=False)
+            moved |= self._move_clusters(glue_rows=True)
+            if not moved:
+                break
+        else:
+            sweeps()      # после последних перестановок — снова расставить блоки без наложений
+
     def _initial_order(self, root: str) -> None:
         """Начальный порядок — обход в глубину от опорного человека."""
         index: dict[str, int] = {}
@@ -312,6 +559,7 @@ class _Engine:
         for _ in range(10):
             for L in layers:
                 self._place_layer(L, up=True, down=True, reorder=False)
+        self._straighten()
         return self._finish()
 
     # ---------- пересечения ----------

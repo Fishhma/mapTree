@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tree_engine.gedcom import load, parse
 from tree_engine.generations import assign_generations
-from tree_engine.layout import CARD_W, compute_layout, count_crossings
+from tree_engine.layout import CARD_W, SNAP_DX, _isotonic_l1, compute_layout, count_crossings
 from tree_engine.model import Family, FuzzyDate, Person, Tree, deletion_blockers, lifespan
 from tree_engine.render_svg import rounded_path
 
@@ -209,6 +209,30 @@ class LayoutTest(unittest.TestCase):
         xs = sorted(["h", "w1", "w2"], key=lambda p: lay.boxes[p].x)
         self.assertEqual(xs[1], "h")
 
+    def test_only_children_stand_exactly_under_parents(self):
+        # Цепочка единственных детей с «пришлыми» супругами: все линии вниз — прямые.
+        t = build({"a": ("Дед", "M", None), "b": ("Бабушка", "F", None), "c": ("Отец", "M", None),
+                   "d": ("Мать", "F", None), "e": ("Сын", "M", None), "f": ("Невестка", "F", None),
+                   "g": ("Внук", "M", None), "x": ("Дядя", "M", None), "y": ("Тётя", "F", None)},
+                  [("f1", ["a", "b"], ["c"]), ("f2", ["c", "d"], ["e"]), ("f3", ["e", "f"], ["g"]),
+                   ("fx", ["x", "y"], [])])
+        lay = compute_layout(t, "g")
+        for fid, child in (("f1", "c"), ("f2", "e"), ("f3", "g")):
+            self.assertAlmostEqual(lay.boxes[child].x, lay.unions[fid].x, delta=0.5)
+
+    def test_parents_centered_over_their_children(self):
+        t = build({"p": ("Отец", "M", None), "m": ("Мать", "F", None), "a": ("A", "M", None),
+                   "b": ("B", "F", None), "c": ("C", "M", None)},
+                  [("fam", ["p", "m"], ["a", "b", "c"])])
+        lay = compute_layout(t, "a")
+        self.assertAlmostEqual(lay.boxes["b"].x, lay.unions["fam"].x, delta=0.5)
+
+    def test_isotonic_l1_takes_median_not_mean(self):
+        # Модули не усредняют: из пожеланий 0, 0, 90 блок выбирает 0 (среднее дало бы 30).
+        self.assertEqual(_isotonic_l1([[(0, 1), (0, 1), (90, 1)]]), [0])
+        # Нарушение порядка: второй хочет левее первого — оба встают в медиану общих пожеланий.
+        self.assertEqual(_isotonic_l1([[(10, 1), (20, 1)], [(5, 1)]]), [10, 10])
+
     def test_rounded_path_drops_points_on_straight_line(self):
         self.assertEqual(rounded_path([(5, 0), (5, 10), (5, 10), (5, 40)]), "M 5.0 0.0 L 5.0 40.0")
 
@@ -236,6 +260,17 @@ class LayoutTest(unittest.TestCase):
                 left, right = sorted(fam.partners, key=lambda p: layout.boxes[p].x)
                 female_left += tree.people[left].sex == "F" and tree.people[right].sex == "M"
         self.assertLessEqual(female_left, 7)   # «муж слева»; исключения — цепочки браков (было 15)
+        only_children = straight = 0
+        span = 0.0
+        for fid, fam in tree.families.items():
+            u = layout.unions.get(fid)
+            for c in fam.children if u else ():
+                span += abs(layout.boxes[c].x - u.x)
+            if u and len(fam.children) == 1:
+                only_children += 1
+                straight += abs(layout.boxes[fam.children[0]].x - u.x) <= SNAP_DX
+        self.assertGreaterEqual(straight, 8)   # прямые линии к единственным детям (было 0 из 11)
+        self.assertLessEqual(span, 17000)      # сумма горизонталей «союз → ребёнок» (было 17648)
 
 
 if __name__ == "__main__":
