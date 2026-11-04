@@ -290,9 +290,10 @@ class _Engine:
         if cost() >= before:
             block.members.reverse()
 
-    def _place_layer(self, layer: int, up: bool, down: bool, reorder: bool = True) -> None:
+    def _place_layer(self, layer: int, up: bool, down: bool, reorder: bool = True,
+                     orient: bool = False) -> None:
         blocks = self.layers[layer]
-        if down and reorder:
+        if down and (reorder or orient):
             for b in blocks:
                 self._orient(b)
         desired = []
@@ -471,12 +472,13 @@ class _Engine:
         blocks, moved = self.layers[layer], False
         for i in range(len(blocks) - 1):
             a, b = blocks[i], blocks[i + 1]
-            crossings, energy = self._layer_crossings(layer), self._energy([a, b])
+            near = {layer, layer + 1}
+            crossings, energy = self._crossings(near), self._energy([a, b])
             la, lb = a.left, b.left
             blocks[i], blocks[i + 1] = b, a
             b.left = la                                  # пара занимает то же место
             a.left = lb + b.width - a.width
-            if (self._layer_crossings(layer) <= crossings
+            if (self._crossings(near) <= crossings
                     and self._energy([a, b]) < energy - SWAP_GAIN):
                 moved = True
             else:
@@ -532,17 +534,51 @@ class _Engine:
                 b.left = acc
                 acc += b.width + (self._gap(b, blocks[i + 1]) if i + 1 < len(blocks) else 0)
 
+    def _snapshot(self) -> tuple:
+        return ({L: list(bl) for L, bl in self.layers.items()},
+                [(b, list(b.members), b.left) for bl in self.layers.values() for b in bl])
+
+    def _restore(self, snap: tuple) -> None:
+        orders, blocks = snap
+        for L, bl in orders.items():
+            self.layers[L][:] = bl
+        for b, members, left in blocks:
+            b.members[:] = members
+            b.left = left
+
     def run(self, root: str) -> Layout:
+        """Два варианта порядка в рядах — берём лучший.
+
+        1) порядок обхода родства от опорного человека сохраняется как есть: ветви
+           отца и матери не перемешиваются, пересечений обычно почти нет;
+        2) тот же обход, затем сортировка блоков по желаемой позиции — помогает,
+           когда обход неудачно разложил дальние ветви.
+        Лучший — меньше пересечений, затем меньше «жена слева», затем короче линии.
+        """
+        start = self._snapshot()
+        best = None
+        for reorder in (False, True):
+            self._restore(start)
+            self._order(root, reorder)
+            self._straighten()
+            female_left = sum(self._female_left(b) for bl in self.layers.values() for b in bl)
+            score = (self._crossings(), female_left, round(self._energy()))
+            if best is None or score < best[0]:
+                best = (score, self._snapshot())
+        self._restore(best[1])
+        return self._finish()
+
+    def _order(self, root: str, reorder: bool) -> None:
         self._initial_order(root)
         layers = sorted(self.layers)
         for it in range(ITERATIONS):
             for L in layers[1:]:
-                self._place_layer(L, up=False, down=True)
+                self._place_layer(L, up=False, down=True, reorder=reorder, orient=True)
             for L in reversed(layers[:-1]):
-                self._place_layer(L, up=True, down=False)
+                self._place_layer(L, up=True, down=False, reorder=reorder)
         for _ in range(6):
             for L in layers:
-                self._place_layer(L, up=True, down=True)
+                self._place_layer(L, up=True, down=True, reorder=reorder, orient=True)
         # Устранение пересечений перестановкой соседних блоков, затем
         # подгонка координат при фиксированном порядке.
         for _ in range(8):
@@ -559,20 +595,23 @@ class _Engine:
         for _ in range(10):
             for L in layers:
                 self._place_layer(L, up=True, down=True, reorder=False)
-        self._straighten()
-        return self._finish()
 
     # ---------- пересечения ----------
-    def _layer_crossings(self, layer: int) -> int:
-        """Пересечения линий, входящих в ряд сверху и выходящих из него вниз."""
+    def _crossings(self, child_layers: set[int] | None = None) -> int:
+        """Пересечения линий «союз → ребёнок», у которых ребёнок в одном из рядов `child_layers`
+        (None — во всём древе).
+
+        Перестановка в ряду L меняет только линии, входящие в L и выходящие из него:
+        это дети в рядах L и L + 1. Считаем ровно их — тогда каждая принятая
+        перестановка уменьшает и общее число пересечений, и поиск не зацикливается.
+        """
         groups: dict[int, list[tuple[float, float]]] = {}
         for fid, fam in self.t.families.items():
             if not fam.partners or not fam.children:
                 continue
-            ulayer = max(self.block_of[p].layer for p in fam.partners)
             for c in fam.children:
                 clayer = self.block_of[c].layer
-                if layer in (ulayer, clayer):
+                if child_layers is None or clayer in child_layers:
                     groups.setdefault(clayer, []).append((self.union_x(fid), self.x(c)))
         total = 0
         for edges in groups.values():
@@ -586,25 +625,26 @@ class _Engine:
     def _transpose(self, layer: int) -> bool:
         blocks = self.layers[layer]
         improved_any = False
-        changed = True
-        while changed:
-            changed = False
+        near = {layer, layer + 1}
+        changed, rounds = True, 0
+        while changed and rounds < 50:
+            changed, rounds = False, rounds + 1
             for b in blocks:                      # разворот блока супругов
                 if len(b.members) > 1:
-                    before = self._layer_crossings(layer)
+                    before = self._crossings(near)
                     b.members.reverse()
-                    if self._layer_crossings(layer) >= before:
-                        b.members.reverse()
-                    else:
+                    if self._crossings(near) < before:
                         changed = improved_any = True
+                    else:
+                        b.members.reverse()
             for i in range(len(blocks) - 1):      # перестановка соседей
                 a, b = blocks[i], blocks[i + 1]
-                before = self._layer_crossings(layer)
+                before = self._crossings(near)
                 la, lb = a.left, b.left
                 blocks[i], blocks[i + 1] = b, a
                 b.left = la
                 a.left = la + b.width + (lb - la - a.width)
-                if self._layer_crossings(layer) < before:
+                if self._crossings(near) < before:
                     changed = improved_any = True
                 else:
                     blocks[i], blocks[i + 1] = a, b

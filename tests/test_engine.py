@@ -4,9 +4,9 @@ from pathlib import Path
 
 from tree_engine.gedcom import load, parse
 from tree_engine.generations import assign_generations
-from tree_engine.layout import CARD_W, SNAP_DX, _isotonic_l1, compute_layout, count_crossings
+from tree_engine.layout import CARD_W, SNAP_DX, Line, _isotonic_l1, compute_layout, count_crossings
 from tree_engine.model import Family, FuzzyDate, Person, Tree, deletion_blockers, lifespan
-from tree_engine.render_svg import rounded_path
+from tree_engine.render_svg import line_jumps, rounded_path
 
 GED = Path(__file__).parent / "rootsmagic_tree.ged"   # личные данные — не в git!
 needs_ged = unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")
@@ -253,7 +253,7 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(len(layout.boxes), 108)
         self.assertEqual(len(layout.rows), 9)
         self.check_no_overlap(tree, layout)
-        self.assertLessEqual(count_crossings(tree, layout), 5)   # защита от регрессии
+        self.assertEqual(count_crossings(tree, layout), 0)   # было 5; защита от регрессии
         female_left = 0
         for fam in tree.families.values():
             if len(fam.partners) == 2:
@@ -269,7 +269,9 @@ class LayoutTest(unittest.TestCase):
             if u and len(fam.children) == 1:
                 only_children += 1
                 straight += abs(layout.boxes[fam.children[0]].x - u.x) <= SNAP_DX
-        self.assertGreaterEqual(straight, 8)   # прямые линии к единственным детям (было 0 из 11)
+        # прямые линии к единственным детям (было 0 из 11; 9 до этапа 5 — часть уступили
+        # ради нуля пересечений)
+        self.assertGreaterEqual(straight, 6)
         self.assertLessEqual(span, 17000)      # сумма горизонталей «союз → ребёнок» (было 17648)
 
 
@@ -283,6 +285,18 @@ class RoundedPathTest(unittest.TestCase):
         self.assertIn("Q 0.0 10.0", d)                 # скругление вокруг угла
         self.assertIn("L 0.0 5.0", d)                  # радиус урезан до половины отрезка
         self.assertEqual(rounded_path([(0, 0), (0, 50)]), "M 0.0 0.0 L 0.0 50.0")
+
+    def test_horizontal_jumps_over_other_family_vertical(self):
+        bus = Line("descent", [(0, 50), (200, 50)], "a")
+        drop = Line("descent", [(100, 0), (100, 100)], "b")
+        own = Line("descent", [(150, 0), (150, 100)], "a")        # своя семья — без мостика
+        near_corner = Line("descent", [(10, 0), (10, 100)], "c")   # у самого угла — без мостика
+        jumps = line_jumps([bus, drop, own, near_corner])
+        self.assertEqual(jumps, [[(100, 50)], [], [], []])
+        d = rounded_path(bus.points, jumps=jumps[0])
+        self.assertIn("L 95.0 50.0 A 5 5 0 0 1 105.0 50.0", d)    # полукруг выпуклостью вверх
+        back = rounded_path(list(reversed(bus.points)), jumps=jumps[0])
+        self.assertIn("L 105.0 50.0 A 5 5 0 0 0 95.0 50.0", back)  # справа налево — тоже вверх
 
 
 class UserDateInputTest(unittest.TestCase):

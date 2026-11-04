@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from tree_engine import model as engine
 from tree_engine.layout import CARD_H, CARD_W, compute_layout
-from tree_engine.render_svg import rounded_path
+from tree_engine.render_svg import line_jumps, rounded_path
 
 from .models import Event, Family, Person, TreeSettings
 
@@ -69,8 +69,8 @@ def tree_payload() -> dict:
                   for b in layout.boxes.values()],
         "unions": [{"id": u.fid, "x": round(u.x, 1), "y": round(u.y, 1)}
                    for u in layout.unions.values()],
-        "lines": [{"kind": ln.kind, "family": ln.fid, "d": rounded_path(ln.points)}
-                  for ln in layout.lines],
+        "lines": [{"kind": ln.kind, "family": ln.fid, "d": rounded_path(ln.points, jumps=jumps)}
+                  for ln, jumps in zip(layout.lines, line_jumps(layout.lines))],
         "rows": [{"gen": g, "y": y} for g, y in sorted(layout.rows.items())],
         "width": round(layout.width), "height": round(layout.height),
         "card": {"w": CARD_W, "h": CARD_H},

@@ -6,8 +6,11 @@ from __future__ import annotations
 
 from html import escape
 
-from .layout import CARD_H, CARD_W, Layout
+from .layout import CARD_H, CARD_W, Layout, Line
 from .model import Tree
+
+CORNER_R = 12   # радиус скругления углов линий
+JUMP_R = 5      # радиус «мостика», которым горизонтальная линия перепрыгивает вертикальную
 
 COLORS = {
     "paper": "#eef1ee",
@@ -27,18 +30,56 @@ def _fit(text: str, size: float, width: float) -> str:
     return text if len(text) <= max_chars else text[: max_chars - 1] + "…"
 
 
-def rounded_path(points: list[tuple[float, float]], radius: float = 12) -> str:
+def line_jumps(lines: list[Line]) -> list[list[tuple[float, float]]]:
+    """Где горизонтальный участок линии пересекает вертикальный участок линии другой семьи.
+
+    Для каждой линии — точки (x, y) на её горизонталях; там рисуется «мостик».
+    Горизонталь не должна быть у самого своего угла (мостик не поместится). У чужой
+    вертикали угол может быть рядом: уже через 6 px скругление почти отвесное
+    (отклонение меньше 1 px), и мостик над ним выглядит так же.
+    """
+    margin, v_margin = CORNER_R + JUMP_R, 6
+    hs, vs = [], []
+    for i, ln in enumerate(lines):
+        for (ax, ay), (bx, by) in zip(ln.points, ln.points[1:]):
+            if ay == by and ax != bx:
+                hs.append((i, ln.fid, ay, min(ax, bx), max(ax, bx)))
+            elif ax == bx and ay != by:
+                vs.append((ln.fid, ax, min(ay, by), max(ay, by)))
+    out: list[list[tuple[float, float]]] = [[] for _ in lines]
+    for i, fid, y, x1, x2 in hs:
+        for vfid, x, y1, y2 in vs:
+            if vfid != fid and x1 + margin < x < x2 - margin and y1 + v_margin <= y <= y2 - v_margin:
+                if (x, y) not in out[i]:
+                    out[i].append((x, y))
+    return out
+
+
+def rounded_path(points: list[tuple[float, float]], radius: float = CORNER_R,
+                 jumps: list[tuple[float, float]] = ()) -> str:
     """Ломаная → SVG-путь со скруглёнными углами (дуга-кривая вместо прямого угла).
 
     Радиус уменьшается на коротких отрезках, чтобы скругление не «съело» отрезок.
+    jumps — точки на горизонталях, где линия перепрыгивает чужую вертикаль полукругом.
     """
     pts = [p for i, p in enumerate(points) if i == 0 or p != points[i - 1]]
     pts = [p for i, p in enumerate(pts)                      # точки посреди прямого отрезка не нужны
            if i in (0, len(pts) - 1)
            or not (pts[i - 1][0] == p[0] == pts[i + 1][0] or pts[i - 1][1] == p[1] == pts[i + 1][1])]
-    if len(pts) < 3:
-        return "M " + " L ".join(f"{x:.1f} {y:.1f}" for x, y in pts)
     d = [f"M {pts[0][0]:.1f} {pts[0][1]:.1f}"]
+
+    def straight(a: tuple[float, float], b: tuple[float, float]) -> None:
+        (ax, ay), (bx, by) = a, b
+        if ay == by and ax != bx:
+            step = 1 if bx > ax else -1
+            xs = sorted((x for x, y in jumps if y == ay and min(ax, bx) + JUMP_R < x < max(ax, bx) - JUMP_R),
+                        key=lambda x: x * step)
+            for x in xs:      # полукруг над чужой линией (выпуклостью вверх)
+                d.append(f"L {x - step * JUMP_R:.1f} {ay:.1f} "
+                         f"A {JUMP_R} {JUMP_R} 0 0 {1 if step > 0 else 0} {x + step * JUMP_R:.1f} {ay:.1f}")
+        d.append(f"L {bx:.1f} {by:.1f}")
+
+    cur = pts[0]
     for (ax, ay), (bx, by), (cx, cy) in zip(pts, pts[1:], pts[2:]):
         len_in = abs(bx - ax) + abs(by - ay)
         len_out = abs(cx - bx) + abs(cy - by)
@@ -47,8 +88,11 @@ def rounded_path(points: list[tuple[float, float]], radius: float = 12) -> str:
         sy = by - r * ((by > ay) - (by < ay))
         ex = bx + r * ((cx > bx) - (cx < bx))
         ey = by + r * ((cy > by) - (cy < by))
-        d.append(f"L {sx:.1f} {sy:.1f} Q {bx:.1f} {by:.1f} {ex:.1f} {ey:.1f}")
-    d.append(f"L {pts[-1][0]:.1f} {pts[-1][1]:.1f}")
+        straight(cur, (sx, sy))
+        d.append(f"Q {bx:.1f} {by:.1f} {ex:.1f} {ey:.1f}")
+        cur = (ex, ey)
+    if len(pts) > 1:
+        straight(cur, pts[-1])
     return " ".join(d)
 
 
@@ -71,8 +115,8 @@ def render(tree: Tree, layout: Layout, root: str | None = None, title: str = "")
                    f'stroke="{COLORS["muted"]}" stroke-width="1"/>')
 
     # линии
-    for line in layout.lines:
-        d = rounded_path(line.points)
+    for line, jumps in zip(layout.lines, line_jumps(layout.lines)):
+        d = rounded_path(line.points, jumps=jumps)
         w = 1.6 if line.kind == "marriage" else 1.3
         out.append(f'<path d="{d}" fill="none" stroke="{COLORS["line"]}" stroke-width="{w}" '
                    f'stroke-linejoin="round" data-family="{escape(line.fid)}"/>')
