@@ -31,10 +31,7 @@
       <button type="button" id="fit" title="Показать всё древо (0)">Всё древо</button>
       <button type="button" id="to-root" title="Ко мне">Ко мне</button>
       <a class="button" href="{% url 'tree-svg' %}" title="Всё древо одним файлом для печати">SVG для печати</a>
-      <form class="logout" method="post" action="{% url 'logout' %}">
-        {% csrf_token %}
-        <button type="submit" title="Вы вошли как {{ user.username }}">Выйти</button>
-      </form>
+      {% include "genealogy/_avatar.html" %}
     </nav>
 
     <p class="message" id="message" hidden></p>

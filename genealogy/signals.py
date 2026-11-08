@@ -1,8 +1,9 @@
+from django.db import transaction
 from django.db.models import Q
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
-from .models import Family, Person
+from .models import Family, Person, SourceFile
 
 
 def drop_hollow_families() -> int:
@@ -19,3 +20,14 @@ def drop_hollow_families() -> int:
 def drop_empty_families(sender, instance, **kwargs):
     """После удаления человека убираем семьи, от которых остался только один партнёр без детей."""
     drop_hollow_families()
+
+
+@receiver(post_delete, sender=SourceFile)
+def delete_file_from_disk(sender, instance, **kwargs):
+    """Файл материала (скан, фото) удаляется с диска вместе с записью о нём.
+
+    Только после успешного завершения транзакции: если удаление откатится, файл останется.
+    """
+    if instance.file:
+        name, storage = instance.file.name, instance.file.storage
+        transaction.on_commit(lambda: storage.delete(name))

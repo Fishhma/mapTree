@@ -720,3 +720,151 @@ class StartTest(SmallTreeMixin, TestCase):
                                                    "file": self.ged(encoding="cp1250")}).json()
         self.assertEqual(len(data["people"]), 3)
         self.assertIn("UTF-8", data["notes"][0])
+
+
+class AccountTest(SmallTreeMixin, TestCase):
+    """Страница «Аккаунт»: логин, пароль, удаление древа и учётной записи."""
+    PASSWORD = "Древо-пароль-1"
+
+    def setUp(self):
+        import shutil
+        import tempfile
+        from django.test import override_settings
+        super().setUp()
+        self.make_tree()
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=media)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.media = Path(media)
+
+    def post(self, action, **data):
+        return self.client.post("/account/", {"action": action, **data})
+
+    def add_material(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        source = Source.objects.create(tree=self.tree, category="memory", title="Свадьба")
+        sf = SourceFile.objects.create(source=source, file=SimpleUploadedFile("foto.jpg", b"jpeg"))
+        path = self.media / sf.file.name
+        self.assertTrue(path.exists())
+        return path
+
+    def test_page_and_header_links(self):
+        r = self.client.get("/account/")
+        ids = __import__("re").findall(r'id="([^"]+)"', r.content.decode())
+        self.assertEqual(len(ids), len(set(ids)), ids)                        # id не повторяются
+        self.assertContains(r, "Вы вошли как <strong>owner</strong>")
+        self.assertContains(r, "В древе 7 чел.")
+        self.assertContains(r, 'action="/logout/"')
+        for page in ("/", f"/people/{self.marian.code}/"):
+            html = self.client.get(page)
+            self.assertContains(html, 'class="avatar" href="/account/"')            # значок профиля
+            self.assertNotContains(html, 'action="/logout/"')                      # «Выйти» — только в аккаунте
+
+    def test_change_username_needs_password(self):
+        r = self.post("username", username="novy", password="не тот")
+        self.assertEqual(r.status_code, 400)
+        self.assertContains(r, "Неверный пароль", status_code=400)
+        self.assertContains(r, "Вы вошли как <strong>owner</strong>", status_code=400)
+        r = self.post("username", username="owner", password=self.PASSWORD)
+        self.assertContains(r, "нынешний логин", status_code=400)
+        User.objects.create_user("zanyato")
+        self.assertEqual(self.post("username", username="zanyato", password=self.PASSWORD).status_code, 400)
+
+        r = self.post("username", username="novy", password=self.PASSWORD)
+        self.assertRedirects(r, "/account/#login", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "novy")
+        self.assertContains(self.client.get("/account/"), "Логин изменён")
+        self.assertEqual(self.client.get("/api/tree/").status_code, 200)       # древо осталось своим
+
+    def test_change_password_keeps_session(self):
+        r = self.post("password", old_password="не тот", new_password1="Новый-пароль-77",
+                      new_password2="Новый-пароль-77")
+        self.assertEqual(r.status_code, 400)
+        r = self.post("password", old_password=self.PASSWORD, new_password1="Новый-пароль-77",
+                      new_password2="Новый-пароль-77")
+        self.assertRedirects(r, "/account/#password", fetch_redirect_response=False)
+        self.assertContains(self.client.get("/account/"), "Пароль изменён")
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("Новый-пароль-77"))
+        self.assertEqual(self.client.get("/account/").status_code, 200)        # не выкинуло
+
+    def test_clear_tree_needs_password_and_phrase(self):
+        file = self.add_material()
+        for data in ({"password": self.PASSWORD, "confirm": "удалить"},
+                     {"password": "не тот", "confirm": "удалить древо"},
+                     {"password": self.PASSWORD}):
+            r = self.post("clear", **data)
+            self.assertEqual(r.status_code, 400)
+            self.assertContains(r, "<details class=\"danger\" id=\"danger\" open>", status_code=400)
+        self.assertEqual(self.tree.people.count(), 7)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.post("clear", password=self.PASSWORD, confirm="  Удалить   ДРЕВО ")
+        self.assertRedirects(r, "/", fetch_redirect_response=False)
+        self.tree.refresh_from_db()
+        self.assertFalse(self.tree.people.exists())
+        self.assertFalse(Source.objects.filter(tree=self.tree).exists())
+        self.assertFalse(file.exists())                                       # файл удалён с диска
+        self.assertEqual((self.tree.root_person, self.tree.next_number), (None, 1))
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())        # учётка осталась
+        self.assertContains(self.client.get("/"), 'id="start"')               # окно первого входа
+
+    def test_delete_account_with_tree(self):
+        file = self.add_material()
+        other = User.objects.create_user("drugoy")
+        other_tree = FamilyTree.objects.create(owner=other)
+        Person.objects.create(tree=other_tree, given_name="Чужой")
+        r = self.post("delete", password=self.PASSWORD, confirm="OWNER")     # логин — точно
+        self.assertContains(r, "Нужно вписать «owner»", status_code=400)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.post("delete", password=self.PASSWORD, confirm="owner")
+        self.assertContains(r, "Учётная запись удалена")
+        self.assertFalse(User.objects.filter(username="owner").exists())
+        self.assertFalse(FamilyTree.objects.filter(pk=self.tree.pk).exists())
+        self.assertFalse(Person.objects.filter(tree_id=self.tree.pk).exists())
+        self.assertFalse(file.exists())
+        self.assertEqual(other_tree.people.count(), 1)                        # чужое не тронуто
+        self.assertRedirects(self.client.get("/"), "/login/?next=/")          # вышли
+
+    def test_last_admin_cannot_delete_self(self):
+        self.user.is_superuser = True
+        self.user.save()
+        self.assertContains(self.client.get("/account/"), "единственный администратор")
+        r = self.post("delete", password=self.PASSWORD, confirm="owner")
+        self.assertEqual(r.status_code, 400)
+        self.assertTrue(User.objects.filter(pk=self.user.pk).exists())
+        User.objects.create_superuser("admin2", "a@a.cz", "pw")
+        r = self.post("delete", password=self.PASSWORD, confirm="owner")
+        self.assertContains(r, "Учётная запись удалена")
+
+
+class StaticVersionTest(SmallTreeMixin, TestCase):
+    """К адресам CSS и JS добавляется версия: после правки файла браузер берёт новый."""
+
+    def test_pages_link_versioned_files(self):
+        import hashlib
+        root = Path(__file__).resolve().parent.parent / "static" / "genealogy"
+        html = self.client.get("/").content.decode()
+        for name in ("tree.css", "tree.js"):
+            version = hashlib.md5((root / name).read_bytes()).hexdigest()[:10]
+            self.assertIn(f"/static/genealogy/{name}?v={version}", html)
+        self.client.logout()
+        self.assertContains(self.client.get("/login/"), "/static/genealogy/auth.css?v=")
+
+    def test_version_changes_with_content(self):
+        import os
+        import tempfile
+        from .static_version import file_version
+        fd, path = tempfile.mkstemp(suffix=".css")
+        os.close(fd)
+        self.addCleanup(os.remove, path)
+        Path(path).write_text("a { color: red; }")
+        first = file_version(path)
+        self.assertEqual(file_version(path), first)
+        Path(path).write_text("a { color: blue; }")
+        os.utime(path, (1, 1))                      # время изменения точно другое
+        self.assertNotEqual(file_version(path), first)

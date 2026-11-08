@@ -25,10 +25,12 @@ a { color: var(--ink); }
 .masthead-inner { max-width: 1120px; margin: 0 auto; padding: 14px 16px 0; }
 .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .top a { text-decoration: none; color: var(--muted); }
-.top .logout { margin: 0; color: var(--muted); }
-.top .logout button { padding: 0; border: 0; background: none; font: inherit; color: var(--muted);
-                      text-decoration: underline; cursor: pointer; }
-.top .logout button:hover { color: var(--ink); }
+.top { align-items: center; }
+.top .avatar { flex: none; width: 30px; height: 30px; overflow: hidden; border: 1px solid var(--hairline);
+               border-radius: 50%; background: var(--surface); color: var(--ink); }
+.top .avatar svg { display: block; width: 100%; height: 100%; }
+.top .avatar:hover { border-color: var(--ink); }
+.top .avatar:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .top a:hover { color: var(--ink); }
 
 .head { display: flex; gap: 14px; align-items: stretch; margin: 14px 0 10px; }

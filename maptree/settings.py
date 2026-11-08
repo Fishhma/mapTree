@@ -62,6 +62,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# К адресу CSS/JS добавляется ?v=<хеш содержимого>: после правки браузер сразу берёт новый файл.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "genealogy.static_version.VersionedStaticFilesStorage"},
+}
 # Сканы документов и фотографии источников
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"

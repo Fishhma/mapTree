@@ -1,0 +1,7 @@
+{# Значок профиля: ссылка на страницу «Аккаунт». Силуэт рисуется цветом текста (currentColor). #}
+<a class="avatar" href="{% url 'account' %}" title="Аккаунт: {{ user.username }}" aria-label="Аккаунт ({{ user.username }})">
+  <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <circle cx="16" cy="12.5" r="5.6" fill="currentColor"/>
+    <path d="M4.5 32c0-7 5.1-11.4 11.5-11.4S27.5 25 27.5 32z" fill="currentColor"/>
+  </svg>
+</a>

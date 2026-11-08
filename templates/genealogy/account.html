@@ -1,0 +1,79 @@
+{% extends "registration/base.html" %}
+{% block title %}Аккаунт · Древо{% endblock %}
+{% block main %}
+<main class="account">
+  <nav class="account-top">
+    <a href="{% url 'tree' %}">← К древу</a>
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="logout-button">Выйти из аккаунта</button>
+    </form>
+  </nav>
+
+  <h1>Аккаунт</h1>
+  <p class="hint">Вы вошли как <strong>{{ user.username }}</strong>.
+    В древе {{ people }} чел., материалов: {{ materials }}.</p>
+
+  <section class="auth-card" id="login">
+    <h2>Логин</h2>
+    {% for m in messages %}{% if m.extra_tags == "login" %}<p class="notice" role="status">{{ m }}</p>{% endif %}{% endfor %}
+    <form method="post" action="{% url 'account' %}#login" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="username">
+      {% include "genealogy/_account_fields.html" with form=username_form %}
+      <button type="submit">Сменить логин</button>
+    </form>
+  </section>
+
+  <section class="auth-card" id="password">
+    <h2>Пароль</h2>
+    {% for m in messages %}{% if m.extra_tags == "password" %}<p class="notice" role="status">{{ m }}</p>{% endif %}{% endfor %}
+    <form method="post" action="{% url 'account' %}#password" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="password">
+      {% include "genealogy/_account_fields.html" with form=password_form %}
+      <button type="submit">Сменить пароль</button>
+    </form>
+  </section>
+
+  <details class="danger" id="danger"{% if danger_open %} open{% endif %}>
+    <summary>Удаление древа и учётной записи</summary>
+
+    <section class="auth-card" id="clear">
+      <h2>Удалить древо и начать заново</h2>
+      {% if people or materials %}
+        <p class="hint">Удалятся все люди, семьи, места и материалы (с файлами). Учётная запись
+          останется, и откроется окно первого входа — можно будет загрузить GEDCOM или начать с нуля.
+          <strong>Вернуть удалённое нельзя.</strong>
+          Перед этим можно сохранить <a href="{% url 'tree-svg' %}">древо в SVG</a>.</p>
+        <form method="post" action="{% url 'account' %}#clear" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="clear">
+          {% include "genealogy/_account_fields.html" with form=clear_form %}
+          <button type="submit">Удалить древо</button>
+        </form>
+      {% else %}
+        <p class="hint">Древо и так пустое.</p>
+      {% endif %}
+    </section>
+
+    <section class="auth-card" id="delete">
+      <h2>Удалить учётную запись</h2>
+      {% if deletable %}
+        <p class="hint">Удалятся учётная запись и всё древо: люди, семьи, места и материалы (с файлами).
+          Войти снова будет нельзя, для новой регистрации понадобится новое приглашение.
+          <strong>Вернуть удалённое нельзя.</strong></p>
+        <form method="post" action="{% url 'account' %}#delete" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete">
+          {% include "genealogy/_account_fields.html" with form=delete_form %}
+          <button type="submit">Удалить учётную запись</button>
+        </form>
+      {% else %}
+        <p class="hint">Вы — единственный администратор сайта, поэтому свою учётную запись удалить
+          нельзя: иначе в админку никто не войдёт. Древо можно очистить выше.</p>
+      {% endif %}
+    </section>
+  </details>
+</main>
+{% endblock %}

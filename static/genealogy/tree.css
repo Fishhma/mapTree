@@ -88,7 +88,12 @@ body.panel-open .stats { display: none; }
   border-radius: 6px; background: var(--surface); cursor: pointer; text-decoration: none; font-size: 14px; }
 .controls button:hover, .controls .button:hover { border-color: var(--line); }
 .controls button:focus-visible, .controls .button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
-.controls .logout { margin: 0 0 0 10px; }
+.controls .avatar { position: relative; flex: none; width: 34px; height: 34px; margin-left: 10px;
+  overflow: hidden; border: 1px solid var(--hairline); border-radius: 50%; background: var(--surface);
+  color: var(--ink); }
+.controls .avatar svg { display: block; width: 100%; height: 100%; }
+.controls .avatar:hover { border-color: var(--ink); }
+.controls .avatar:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 .message { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); margin: 0;
   max-width: 460px; text-align: center; color: var(--muted); }

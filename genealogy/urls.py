@@ -7,6 +7,7 @@ urlpatterns = [
     path("login/", auth_views.LoginView.as_view(redirect_authenticated_user=True), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("invite/<str:code>/", accounts.register, name="register"),
+    path("account/", accounts.account, name="account"),
     path("start/self/", onboarding.start_self, name="start-self"),
     path("start/gedcom/", onboarding.start_gedcom, name="start-gedcom"),
     path("", views.tree_page, name="tree"),
