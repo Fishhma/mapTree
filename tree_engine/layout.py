@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cmp_to_key
 
 from .generations import assign_generations
 from .model import Tree
@@ -29,6 +30,7 @@ TRACK_DY = 9         # шаг дорожек шин
 GAP_BASE = 46        # минимальный зазор между рядами (без дорожек)
 SNAP_DX = 24         # ребёнок почти под точкой брака: линия входит в карточку не по центру, зато прямая
 ITERATIONS = 40
+ORDER_MODES = ("branches", "sorted")   # варианты порядка в рядах, берём лучший
 STRAIGHTEN_SWEEPS = 30
 STRAIGHTEN_ROUNDS = 10
 SWAP_GAIN = 20       # перестановка ради длины линий — только при заметном выигрыше, px
@@ -290,10 +292,9 @@ class _Engine:
         if cost() >= before:
             block.members.reverse()
 
-    def _place_layer(self, layer: int, up: bool, down: bool, reorder: bool = True,
-                     orient: bool = False) -> None:
+    def _place_layer(self, layer: int, up: bool, down: bool, reorder: bool = True) -> None:
         blocks = self.layers[layer]
-        if down and (reorder or orient):
+        if down and reorder:
             for b in blocks:
                 self._orient(b)
         desired = []
@@ -527,8 +528,235 @@ class _Engine:
             index[cur] = len(index)
             nxt = self.t.parents(cur) + self.t.spouses(cur) + self.t.siblings(cur) + self.t.children(cur)
             stack += reversed(nxt)
-        for layer, blocks in self.layers.items():
-            blocks.sort(key=lambda b: min(index.get(m, 10**6) for m in b.members))
+        blocks = [b for bl in self.layers.values() for b in bl]
+        self._apply_order(sorted(blocks, key=lambda b: min(index.get(m, 10**6) for m in b.members)))
+
+    # ---------- порядок «по веткам» ----------
+    #
+    # Связи людей и семей в древе без родственных браков образуют дерево. Обходим его
+    # от опорного человека и для каждого блока (супруги одного поколения) и каждой
+    # семьи решаем, какие ветви встают слева, а какие справа:
+    #   • у пары ветвь родителей левого супруга — слева, правого — справа;
+    #   • «высокий» ребёнок (у его супруга есть свои родители) встаёт с краю братьев
+    #     и сестёр, со стороны этой ветви; с каждого края без пересечений помещается один,
+    #     лишних разворачиваем к свободному краю; остальные дети — в середине, по году рождения;
+    #   • край занят, если с той стороны у родителя другой брак с детьми;
+    #   • у человека, к которому пришли снизу (от детей), братья и сёстры — по обе стороны.
+    # Получается одна последовательность блоков «слева направо»; порядок в каждом ряду —
+    # это она же, оставленная только для блоков этого ряда. Каждая ветвь в каждом ряду
+    # идёт сплошным куском, поэтому чужие ветви не перемешиваются. Пересечения остаются
+    # там, где без них нельзя (например, у трёх братьев супруги со своими родителями).
+
+    def _branch_order(self, root: str) -> list[_Block]:
+        t, block_of = self.t, self.block_of
+        fam_blocks: dict[str, list[_Block]] = {}
+        for fid, fam in t.families.items():
+            bl: list[_Block] = []
+            for p in fam.partners:
+                if block_of[p] not in bl:
+                    bl.append(block_of[p])
+            fam_blocks[fid] = bl
+        seen: set = set()
+
+        def ups(b: _Block) -> list[tuple[int, str]]:
+            return [(i, t.people[m].parent_family) for i, m in enumerate(b.members)
+                    if t.people[m].parent_family]
+
+        def downs(b: _Block) -> list[tuple[float, str]]:
+            out = []
+            for fid in {f for m in b.members for f in t.people[m].families}:
+                fam = t.families[fid]
+                if not fam.children and len(fam_blocks[fid]) < 2:
+                    continue                      # брак без детей внутри блока — не ветвь
+                idx = [b.members.index(p) for p in fam.partners if block_of[p] is b]
+                out.append((sum(idx) / len(idx), fid))
+            return sorted(out)
+
+        def outside(family: list, tall: list, layer: int) -> bool:
+            """Ставить ли ветвь супруга «высокого» ребёнка снаружи ветви родителя.
+
+            Обе ветви встают с одной стороны от родительского блока (ряд layer). Если у ветви
+            супруга есть предки выше этого ряда, а у ветви родителя нет детей в ряду ребёнка,
+            ветвь супруга — снаружи, иначе её предки пересекут линии к родителю. В обратном
+            случае — внутри, иначе линия к ребёнку пересечёт его двоюродных.
+            """
+            return (any(x.layer < layer for x in tall)
+                    and not any(x.layer > layer for x in family))
+
+        def block_parts(b: _Block, entry: tuple | None) -> tuple[list, list]:
+            """Что встаёт слева и справа от блока b (без ветви, откуда пришли)."""
+            seen.add(id(b))
+            all_ups = ups(b)
+            up = [(i, fid) for i, fid in all_ups if not (entry and entry == ("up", fid))]
+            if entry and entry[0] == "up":
+                i0 = next(i for i, fid in all_ups if fid == entry[1])
+                sides = ["left" if i < i0 else "right" for i, _ in up]
+            elif len(up) == 1:
+                sides = ["split"]
+            else:
+                mid = (len(b.members) - 1) / 2
+                sides = ["left" if k == 0 else "right" if k == len(up) - 1 else
+                         ("left" if i < mid else "right") for k, (i, _) in enumerate(up)]
+            left: list = []
+            right: list = []
+            split: tuple[list, list] = ([], [])
+            for (i, fid), side in zip(up, sides):
+                if ("u", fid) in seen:
+                    continue
+                lpart, rpart = union_parts(fid, ("child", b), side)
+                if side == "left":
+                    left += lpart + rpart
+                elif side == "right":
+                    right += lpart + rpart
+                else:
+                    split = (lpart, rpart)
+            all_downs = downs(b)
+            center = (len(b.members) - 1) / 2
+            tall_l: list = []
+            kids_l: list = []
+            kids_r: list = []
+            tall_r: list = []
+            for k, (idx, fid) in enumerate(all_downs):
+                if ("u", fid) in seen:
+                    continue
+                # Семья в левой части блока (у мужа две жены — его брак с левой) целиком
+                # уходит влево: правый край её детей занят детьми другого брака.
+                if entry and entry[0] == "down":
+                    k0 = [x for _, x in all_downs].index(entry[1])
+                    d_side = "left" if k < k0 else "right"
+                else:
+                    d_side = "left" if idx < center - 0.25 else "right" if idx > center + 0.25 else None
+                tl, nl, nr, tr = union_parts(fid, ("owner", b), d_side)
+                if d_side == "left":
+                    tall_l += tl
+                    kids_l += nl + nr + tr
+                elif d_side == "right":
+                    kids_r += tl + nl + nr
+                    tall_r += tr
+                else:
+                    tall_l += tl
+                    kids_l += nl
+                    kids_r += nr
+                    tall_r += tr
+            fam_l, fam_r = left + split[0], split[1] + right
+            lpart = (tall_l + fam_l if outside(fam_l, tall_l, b.layer) else fam_l + tall_l) + kids_l
+            rpart = kids_r + (fam_r + tall_r if outside(fam_r, tall_r, b.layer) else tall_r + fam_r)
+            return lpart, rpart
+
+        def union_parts(fid: str, entry: tuple, side: str | None) -> tuple:
+            """Что встаёт слева и справа от места, откуда пришли в семью fid.
+
+            Пришли от ребёнка — (слева, справа). Пришли от родителей — четыре куска:
+            «высокие» дети слева, остальные дети слева, остальные справа, «высокие» справа.
+
+            side — какой край семьи занят. Пришли от ребёнка: где у него другая ветвь
+            (родители супруга): "left" — он встаёт крайним справа среди братьев, "right" —
+            крайним слева, "split" — братья и сёстры по обе стороны. Пришли от родителей:
+            "left"/"right" — семья целиком уходит влево/вправо от блока родителей
+            (с другой стороны — дети другого брака), None — оба края свободны.
+            """
+            seen.add(("u", fid))
+            fam = t.families[fid]
+            came = entry[1] if entry[0] == "child" else None
+
+            def lean(cb: _Block, c: str) -> str | None:
+                """С какой стороны у ребёнка своя ветвь вверх (родители его супруга)."""
+                i0 = cb.members.index(c)
+                others = [i for i, f2 in ups(cb) if f2 != fid]
+                on_left, on_right = any(i < i0 for i in others), any(i > i0 for i in others)
+                return "both" if on_left and on_right else "left" if on_left else "right" if on_right else None
+
+            tall_l: list = []      # дети, чья ветвь слева, — к левому краю
+            tall_r: list = []      # ветвь справа — к правому краю
+            normal: list = []      # без своей ветви вверх — в середину, по году рождения
+            came_key = None
+            for c in sorted(fam.children, key=lambda c: t.people[c].birth_key):
+                cb = block_of[c]
+                if cb is came:
+                    came_key = t.people[c].birth_key
+                    continue
+                if id(cb) in seen or any(cb is x for x, _ in tall_l + tall_r + normal):
+                    continue
+                side_up = lean(cb, c)
+                (tall_l if side_up == "left" else tall_r if side_up == "right" else normal).append((cb, c))
+
+            # С каждого края без пересечений помещается один «высокий» ребёнок. Если с одной
+            # стороны их больше, а другой край свободен — разворачиваем пару: пересечения
+            # важнее правила «муж слева».
+            def move(src: list, dst: list) -> None:
+                cb, c = src.pop()
+                cb.members.reverse()
+                dst.append((cb, c))
+            left_free, right_free = side != "right", side != "left"
+            if fam_blocks[fid]:       # у родителя есть другие браки с детьми — тот край занят
+                ob_downs = downs(fam_blocks[fid][0])
+                here = next((idx for idx, f2 in ob_downs if f2 == fid), None)
+                for idx, f2 in ob_downs:
+                    if f2 != fid and here is not None and t.families[f2].children:
+                        left_free &= idx > here
+                        right_free &= idx < here
+            if left_free and not right_free:
+                while tall_r:
+                    move(tall_r, tall_l)
+            elif right_free and not left_free:
+                while tall_l:
+                    move(tall_l, tall_r)
+            elif left_free and right_free:
+                while len(tall_l) > len(tall_r) + 1:
+                    move(tall_l, tall_r)
+                while len(tall_r) > len(tall_l) + 1:
+                    move(tall_r, tall_l)
+
+            def seqs(kids: list) -> list:
+                out: list = []
+                for cb, _ in kids:
+                    if id(cb) not in seen:
+                        lpart, rpart = block_parts(cb, ("up", fid))
+                        out += lpart + [cb] + rpart
+                return out
+
+            extra = []                            # супруг из другого поколения
+            for ob in fam_blocks[fid][1:]:
+                if id(ob) not in seen and ob is not came:
+                    lpart, rpart = block_parts(ob, ("down", fid))
+                    extra += lpart + [ob] + rpart
+            if entry[0] == "owner":
+                half = len(normal) // 2
+                return seqs(tall_l), seqs(normal[:half]), seqs(normal[half:]) + extra, seqs(tall_r)
+            # Пришли от ребёнка. В ряду родителей слева направо: ветвь отца, ветви супругов
+            # «левых» детей, сам родительский блок, ветви супругов «правых» детей, ветвь матери.
+            # В ряду детей — тот же порядок: двоюродные по отцу, дети, двоюродные по матери.
+            owner, owner_l, owner_r = [], [], []
+            if fam_blocks[fid] and id(fam_blocks[fid][0]) not in seen and fam_blocks[fid][0] is not came:
+                ob = fam_blocks[fid][0]
+                owner_l, owner_r = block_parts(ob, ("down", fid))
+                owner = [ob]
+            if side == "left":
+                before, after = normal, []
+            elif side == "right":
+                before, after = [], normal
+            else:
+                before = [k for k in normal if t.people[k[1]].birth_key < came_key]
+                after = [k for k in normal if t.people[k[1]].birth_key >= came_key]
+            layer = owner[0].layer if owner else came.layer - 1
+            t_l = seqs(tall_l)
+            left = (t_l + owner_l if outside(owner_l, t_l, layer) else owner_l + t_l) + owner + seqs(before)
+            mid = seqs(after)
+            t_r = seqs(tall_r)
+            right = mid + (owner_r + t_r if outside(owner_r, t_r, layer) else t_r + owner_r)
+            return left, right + extra
+
+        rb = block_of[root]
+        lpart, rpart = block_parts(rb, None)
+        order = lpart + [rb] + rpart
+        rest = [b for bl in self.layers.values() for b in bl if id(b) not in seen]
+        return order + sorted(rest, key=lambda b: b.sort_hint)
+
+    def _apply_order(self, order: list[_Block]) -> None:
+        """Расставить блоки рядов в порядке `order` плотно слева направо."""
+        pos = {id(b): i for i, b in enumerate(order)}
+        for blocks in self.layers.values():
+            blocks.sort(key=lambda b: pos.get(id(b), 10**6))
             acc = 0.0
             for i, b in enumerate(blocks):
                 b.left = acc
@@ -549,17 +777,17 @@ class _Engine:
     def run(self, root: str) -> Layout:
         """Два варианта порядка в рядах — берём лучший.
 
-        1) порядок обхода родства от опорного человека сохраняется как есть: ветви
-           отца и матери не перемешиваются, пересечений обычно почти нет;
-        2) тот же обход, затем сортировка блоков по желаемой позиции — помогает,
-           когда обход неудачно разложил дальние ветви.
+        1) «по веткам» (_branch_order): ветви родственников не перемешиваются;
+           на древе до ~300 человек обычно лучший;
+        2) обход родства от опорного человека, затем сортировка блоков по желаемой
+           позиции — иногда выигрывает на очень больших древах.
         Лучший — меньше пересечений, затем меньше «жена слева», затем короче линии.
         """
         start = self._snapshot()
         best = None
-        for reorder in (False, True):
+        for mode in ORDER_MODES:
             self._restore(start)
-            self._order(root, reorder)
+            self._order(root, mode)
             self._straighten()
             female_left = sum(self._female_left(b) for bl in self.layers.values() for b in bl)
             score = (self._crossings(), female_left, round(self._energy()))
@@ -568,17 +796,21 @@ class _Engine:
         self._restore(best[1])
         return self._finish()
 
-    def _order(self, root: str, reorder: bool) -> None:
-        self._initial_order(root)
+    def _order(self, root: str, mode: str) -> None:
+        if mode == "branches":
+            self._apply_order(self._branch_order(root))
+        else:
+            self._initial_order(root)
+        reorder = mode == "sorted"      # «по веткам» сам выбирает порядок и как развернуть пары
         layers = sorted(self.layers)
         for it in range(ITERATIONS):
             for L in layers[1:]:
-                self._place_layer(L, up=False, down=True, reorder=reorder, orient=True)
+                self._place_layer(L, up=False, down=True, reorder=reorder)
             for L in reversed(layers[:-1]):
                 self._place_layer(L, up=True, down=False, reorder=reorder)
         for _ in range(6):
             for L in layers:
-                self._place_layer(L, up=True, down=True, reorder=reorder, orient=True)
+                self._place_layer(L, up=True, down=True, reorder=reorder)
         # Устранение пересечений перестановкой соседних блоков, затем
         # подгонка координат при фиксированном порядке.
         for _ in range(8):
@@ -652,6 +884,45 @@ class _Engine:
         return improved_any
 
     # ---------- вертикаль и линии ----------
+    def _bus_tracks(self, layer: int) -> dict[str, int]:
+        """Высота («дорожка») горизонтальной шины каждой семьи под рядом layer.
+
+        Шины семей, которые перекрываются по горизонтали, идут на разной высоте. Какая
+        выше — не всё равно: верхняя шина пересекает ствол нижней, если проходит над ним,
+        а вертикали верхней к детям пересекают нижнюю шину. Для каждой пары берём порядок
+        с меньшим числом таких пересечений, затем раздаём дорожки сверху вниз.
+        """
+        buses = []
+        for fid, fam in self.t.families.items():
+            if not fam.partners or not fam.children:
+                continue
+            if max(self.block_of[p].layer for p in fam.partners) != layer:
+                continue
+            ux = self.union_x(fid)
+            drops = [ux if abs(self.x(c) - ux) <= SNAP_DX else self.x(c) for c in fam.children]
+            buses.append((fid, ux, drops, min(drops + [ux]), max(drops + [ux])))
+
+        def overlap(a, b) -> bool:
+            return a[3] <= b[4] + 12 and b[3] <= a[4] + 12
+
+        def cost_above(a, b) -> int:
+            """Пересечения, если шина a выше шины b."""
+            return (a[3] < b[1] < a[4]) + sum(b[3] < x < b[4] for x in a[2] if x != a[1])
+
+        def compare(a, b) -> int:
+            if overlap(a, b):
+                d = cost_above(a, b) - cost_above(b, a)
+                if d:
+                    return d
+            return (a[3] > b[3]) - (a[3] < b[3])
+
+        track: dict[str, int] = {}
+        placed: list = []
+        for bus in sorted(buses, key=cmp_to_key(compare)):
+            track[bus[0]] = max((track[g[0]] + 1 for g in placed if overlap(bus, g)), default=0)
+            placed.append(bus)
+        return track
+
     def _finish(self) -> Layout:
         layers = sorted(self.layers)
         min_x = min(b.left for bl in self.layers.values() for b in bl)
@@ -663,27 +934,9 @@ class _Engine:
         bus_track: dict[str, int] = {}
         tracks_in_layer: dict[int, int] = {}
         for L in layers:
-            spans = []
-            for fid, fam in self.t.families.items():
-                if not fam.partners or not fam.children:
-                    continue
-                if max(self.block_of[p].layer for p in fam.partners) != L:
-                    continue
-                ux = self.union_x(fid)
-                xs = [self.x(c) for c in fam.children] + [ux]
-                spans.append((min(xs), max(xs), fid))
-            spans.sort()
-            ends: list[float] = []
-            for lo, hi, fid in spans:
-                for t, end in enumerate(ends):
-                    if lo > end + 12:
-                        ends[t] = hi
-                        bus_track[fid] = t
-                        break
-                else:
-                    ends.append(hi)
-                    bus_track[fid] = len(ends) - 1
-            tracks_in_layer[L] = len(ends)
+            tracks = self._bus_tracks(L)
+            bus_track.update(tracks)
+            tracks_in_layer[L] = max(tracks.values(), default=-1) + 1
 
         rows: dict[int, float] = {}
         y = 40.0

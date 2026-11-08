@@ -4,7 +4,7 @@ from pathlib import Path
 
 from tree_engine.gedcom import load, parse
 from tree_engine.generations import assign_generations
-from tree_engine.layout import CARD_W, SNAP_DX, Line, _isotonic_l1, compute_layout, count_crossings
+from tree_engine.layout import CARD_W, SNAP_DX, Line, _Engine, _isotonic_l1, compute_layout, count_crossings
 from tree_engine.model import Family, FuzzyDate, Person, Tree, deletion_blockers, lifespan
 from tree_engine.render_svg import line_jumps, rounded_path
 
@@ -233,6 +233,37 @@ class LayoutTest(unittest.TestCase):
         # Нарушение порядка: второй хочет левее первого — оба встают в медиану общих пожеланий.
         self.assertEqual(_isotonic_l1([[(10, 1), (20, 1)], [(5, 1)]]), [10, 10])
 
+    def test_branch_order_without_crossings(self):
+        # Случаи, на которых обход «по веткам» ошибался; во всех можно обойтись без пересечений.
+        def sex(pid):
+            return "F" if pid in female else "M"
+        cases = {
+            # у брата жена со своими родителями — её ветвь с его стороны
+            "жена брата": ("r", [("f0", ["fa", "mo"], ["r", "br"]), ("f1", ["br", "w"], []),
+                                 ("f2", ["wf", "wm"], ["w"])]),
+            # сестра жены замужем за человеком со своими родителями — пару надо развернуть
+            "развернуть пару": ("r", [("f0", ["fa", "mo"], ["r"]), ("f1", ["r", "w"], []),
+                                      ("f2", ["wf", "wm"], ["w", "ws"]), ("f3", ["ws", "h"], []),
+                                      ("f4", ["hf", "hm"], ["h"])]),
+            # у матери два брака; ветвь жены брата — с того края, где нет детей второго брака
+            "два брака": ("r", [("f0", ["fa", "mo"], ["r", "br"]), ("f1", ["mo", "st"], ["hb"]),
+                                ("f2", ["sf", "sm"], ["st", "su"]), ("f3", ["br", "bw"], []),
+                                ("f4", ["bwf", "bwm"], ["bw"])]),
+            # предки супруга тёти — снаружи ветви деда
+            "снаружи": ("r", [("f0", ["fa", "mo"], ["r"]), ("f1", ["gf", "gm"], ["fa", "au"]),
+                              ("f2", ["au", "h"], []), ("f3", ["hf", "hm"], ["h"]),
+                              ("f4", ["ggf", "ggm"], ["gf"]), ("f5", ["hgf", "hgm"], ["hf"])]),
+        }
+        female = {"mo", "w", "wm", "ws", "hm", "sm", "su", "bw", "bwm", "gm", "au", "ggm", "hgm"}
+        for name, (root, families) in cases.items():
+            with self.subTest(name):
+                ids = {p for _, partners, kids in families for p in partners + kids}
+                tree = build({p: (p, sex(p), None) for p in ids}, families)
+                e = _Engine(tree, root)
+                e._apply_order(e._branch_order(root))
+                self.assertEqual(e._crossings(), 0)
+                self.assertEqual(count_crossings(tree, compute_layout(tree, root)), 0)
+
     def test_rounded_path_drops_points_on_straight_line(self):
         self.assertEqual(rounded_path([(5, 0), (5, 10), (5, 10), (5, 40)]), "M 5.0 0.0 L 5.0 40.0")
 
@@ -254,6 +285,8 @@ class LayoutTest(unittest.TestCase):
         self.assertEqual(len(layout.rows), 9)
         self.check_no_overlap(tree, layout)
         self.assertEqual(count_crossings(tree, layout), 0)   # было 5; защита от регрессии
+        # и шины на разной высоте не задевают чужие вертикали: ни одного мостика (было 2)
+        self.assertEqual(sum(map(len, line_jumps(layout.lines))), 0)
         female_left = 0
         for fam in tree.families.values():
             if len(fam.partners) == 2:
@@ -272,7 +305,8 @@ class LayoutTest(unittest.TestCase):
         # прямые линии к единственным детям (было 0 из 11; 9 до этапа 5 — часть уступили
         # ради нуля пересечений)
         self.assertGreaterEqual(straight, 6)
-        self.assertLessEqual(span, 17000)      # сумма горизонталей «союз → ребёнок» (было 17648)
+        # сумма горизонталей «союз → ребёнок» (было 17648; чуть длиннее ради нуля пересечений)
+        self.assertLessEqual(span, 17500)
 
 
 if __name__ == "__main__":
