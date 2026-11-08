@@ -48,5 +48,9 @@
   </aside>
 
   <script type="module" src="{% static 'genealogy/tree.js' %}"></script>
+  {% if needs_start %}
+    {% include "genealogy/_start.html" %}
+    <script src="{% static 'genealogy/start.js' %}"></script>
+  {% endif %}
 </body>
 </html>

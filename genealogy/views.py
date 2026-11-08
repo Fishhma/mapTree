@@ -19,6 +19,7 @@ from .editing import (EditError, add_material, add_relative, delete_person, dele
                       save_key_events)
 from .forms import DATE_HINT, person_forms
 from .models import Event, FamilyTree, Person, Place, Source
+from .onboarding import needs_start
 from .timeline import timeline
 
 # Все страницы — только после входа (LoginRequiredMiddleware в настройках) и только
@@ -26,13 +27,13 @@ from .timeline import timeline
 
 
 def user_tree(request) -> FamilyTree:
-    tree, _ = FamilyTree.objects.get_or_create(owner=request.user)
-    return tree
+    return FamilyTree.of(request.user)
 
 
 @ensure_csrf_cookie          # браузеру нужен CSRF-токен для добавления людей
 def tree_page(request):
-    return render(request, "genealogy/tree.html")
+    return render(request, "genealogy/tree.html",
+                  {"needs_start": needs_start(user_tree(request)), "date_hint": DATE_HINT})
 
 
 def tree_api(request):

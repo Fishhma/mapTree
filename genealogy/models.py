@@ -35,6 +35,12 @@ class FamilyTree(models.Model):
     def __str__(self):
         return f"Древо {self.owner}" if self.owner else f"Древо №{self.pk} (без владельца)"
 
+    @classmethod
+    def of(cls, user) -> "FamilyTree":
+        """Древо пользователя (создаётся, если его ещё нет)."""
+        tree, _ = cls.objects.get_or_create(owner=user)
+        return tree
+
     def take_number(self) -> str:
         """Следующий номер человека: P0001, P0002, … Номера удалённых не переиспользуются."""
         FamilyTree.objects.filter(pk=self.pk).update(next_number=models.F("next_number") + 1)

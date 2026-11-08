@@ -625,3 +625,98 @@ class MigrationTest(TransactionTestCase):
         executor = MigrationExecutor(connection)                     # вернуть схему для других тестов
         executor.loader.build_graph()
         executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+SMALL_GED = """0 HEAD
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME Josef /Novák/
+1 SEX M
+1 BIRT
+2 DATE 1900
+2 PLAC Brno
+0 @I2@ INDI
+1 NAME Marie /Nováková/
+1 SEX F
+0 @I3@ INDI
+1 NAME Jan /Novák/
+1 SEX M
+1 FAMC @F1@
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I2@
+1 CHIL @I3@
+0 TRLR
+"""
+
+
+class StartTest(SmallTreeMixin, TestCase):
+    """Первый вход: пустое древо — «Загрузить GEDCOM» или «Начать с нуля»."""
+
+    def ged(self, text=SMALL_GED, name="drevo.ged", encoding="utf-8"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(name, text.encode(encoding))
+
+    def test_window_only_for_empty_tree(self):
+        self.assertContains(self.client.get("/"), 'id="start"')
+        self.make_tree()
+        self.assertNotContains(self.client.get("/"), 'id="start"')
+
+    def test_start_with_own_card(self):
+        r = self.client.post("/start/self/", {"given_name": "Marian", "birth_surname": "Hanus", "sex": "M",
+                                              "birth_date": "6.1.2007", "birth_place": "Praha"})
+        self.assertEqual(r.json(), {"redirect": "/#P0001"})
+        self.tree.refresh_from_db()
+        me = self.tree.root_person
+        self.assertEqual((me.code, me.given_name, me.is_living), ("P0001", "Marian", True))
+        self.assertEqual(me.events.get(kind="BIRT").date, "6 JAN 2007")
+        self.assertEqual(self.client.post("/start/self/", {}).status_code, 409)     # второй раз — нельзя
+
+    def test_card_without_any_data(self):
+        self.assertEqual(self.client.post("/start/self/", {}).status_code, 200)
+        self.assertEqual(self.tree.people.get().code, "P0001")
+
+    def test_new_start_after_tree_was_emptied(self):
+        self.person(given_name="Старый")
+        self.person()
+        Place.objects.create(tree=self.tree, name="Старое место")
+        Person.objects.filter(tree=self.tree).delete()
+        self.assertEqual(self.client.post("/start/self/", {"given_name": "Я"}).status_code, 200)
+        self.assertEqual(self.tree.people.get().code, "P0001")                    # номера — заново
+        self.assertFalse(Place.objects.filter(tree=self.tree, name="Старое место").exists())
+
+    def test_gedcom_preview_saves_nothing(self):
+        r = self.client.post("/start/gedcom/", {"action": "preview", "file": self.ged()})
+        data = r.json()
+        self.assertEqual([p["gid"] for p in data["people"]], ["@I1@", "@I2@", "@I3@"])
+        self.assertEqual(data["people"][1]["name"], "Marie Nováková")
+        self.assertEqual(data["families"], 1)
+        self.assertFalse(self.tree.people.exists())
+
+    def test_gedcom_import_chosen_person_becomes_p0001(self):
+        r = self.client.post("/start/gedcom/", {"action": "import", "root": "@I3@", "file": self.ged()})
+        self.assertEqual(r.json(), {"redirect": "/#P0001"})
+        self.tree.refresh_from_db()
+        me = self.tree.root_person
+        self.assertEqual((me.code, me.given_name), ("P0001", "Jan"))
+        self.assertEqual(self.tree.people.count(), 3)
+        self.assertEqual({p.given_name for p in me.parent_family.partners}, {"Josef", "Marie"})
+        self.assertEqual(self.client.get("/api/tree/").json()["root"], str(me.pk))
+        r = self.client.post("/start/gedcom/", {"action": "import", "file": self.ged()})
+        self.assertEqual(r.status_code, 409)                                        # уже не пустое
+
+    def test_bad_files(self):
+        def error(data):
+            r = self.client.post("/start/gedcom/", data)
+            self.assertEqual(r.status_code, 400)
+            return r.json()["error"]
+        self.assertIn("Выберите файл", error({"action": "preview"}))
+        self.assertIn("не похоже на GEDCOM", error({"action": "preview", "file": self.ged("просто текст")}))
+        self.assertIn("не найден", error({"action": "import", "root": "@I9@", "file": self.ged()}))
+        self.assertFalse(self.tree.people.exists())
+
+    def test_not_utf8_file_is_read_with_warning(self):
+        data = self.client.post("/start/gedcom/", {"action": "preview",
+                                                   "file": self.ged(encoding="cp1250")}).json()
+        self.assertEqual(len(data["people"]), 3)
+        self.assertIn("UTF-8", data["notes"][0])

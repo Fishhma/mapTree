@@ -1,0 +1,73 @@
+{# Окно первого входа: древо пустое. Закрыть нельзя — нужно выбрать, с чего начать. #}
+<div class="start" id="start">
+  <section class="start-card" role="dialog" aria-modal="true" aria-labelledby="start-title">
+
+    <div data-step="choose">
+      <h2 id="start-title">С чего начнём?</h2>
+      <p class="start-lead">Ваше древо пока пустое.</p>
+      <div class="start-options">
+        <button type="button" class="start-option" data-go="gedcom">
+          <strong>Загрузить GEDCOM</strong>
+          <span>Файл из другой программы: RootsMagic, MyHeritage, FamilySearch, Gramps…
+            Загрузить его можно только сейчас, в пустое древо.</span>
+        </button>
+        <button type="button" class="start-option" data-go="self">
+          <strong>Начать с нуля</strong>
+          <span>Сначала — ваша карточка. Она станет P0001, от неё считаются поколения.</span>
+        </button>
+      </div>
+    </div>
+
+    <form data-step="self" action="{% url 'start-self' %}" hidden novalidate>
+      <h2>Ваша карточка</h2>
+      <p class="start-lead">Можно заполнить не всё — дополните потом на странице человека.</p>
+      <div class="start-grid">
+        <label>Имя <input name="given_name" autocomplete="given-name"></label>
+        <label>Отчество <input name="patronymic"></label>
+        <label>Фамилия при рождении <input name="birth_surname" autocomplete="family-name"></label>
+        <label>Пол
+          <select name="sex">
+            <option value="U">—</option>
+            <option value="M">Мужской</option>
+            <option value="F">Женский</option>
+          </select>
+        </label>
+        <label>Дата рождения <input name="birth_date" autocomplete="off"></label>
+        <label>Место рождения <input name="birth_place" autocomplete="off"></label>
+      </div>
+      <p class="start-hint">Даты можно писать так: {{ date_hint }}</p>
+      <p class="start-error" role="alert" hidden></p>
+      <div class="start-actions">
+        <button type="button" class="start-back" data-go="choose">← Назад</button>
+        <button type="submit" class="start-primary">Создать древо</button>
+      </div>
+    </form>
+
+    <form data-step="gedcom" action="{% url 'start-gedcom' %}" hidden novalidate>
+      <h2>Загрузка GEDCOM</h2>
+      <p class="start-lead">Выберите файл .ged. Сначала покажем, кто в нём есть, — ничего ещё не сохранится.</p>
+      <input type="file" name="file" accept=".ged,.gedcom" required>
+      <p class="start-error" role="alert" hidden></p>
+      <div class="start-actions">
+        <button type="button" class="start-back" data-go="choose">← Назад</button>
+        <button type="submit" class="start-primary">Прочитать файл</button>
+      </div>
+    </form>
+
+    <form data-step="who" action="{% url 'start-gedcom' %}" hidden novalidate>
+      <h2>Кто из них вы?</h2>
+      <p class="start-lead" data-summary></p>
+      <ul class="start-notes" data-notes hidden></ul>
+      <input type="search" class="start-search" placeholder="Найти по имени" autocomplete="off"
+             aria-label="Найти себя по имени">
+      <ul class="start-people" data-people></ul>
+      <p class="start-hint">Вы станете P0001 — от вас считаются поколения.</p>
+      <p class="start-error" role="alert" hidden></p>
+      <div class="start-actions">
+        <button type="button" class="start-back" data-go="gedcom">← Другой файл</button>
+        <button type="submit" class="start-primary" disabled>Загрузить древо</button>
+      </div>
+    </form>
+
+  </section>
+</div>

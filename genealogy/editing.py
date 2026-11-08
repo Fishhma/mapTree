@@ -32,7 +32,7 @@ def find_or_create_place(tree, name: str) -> Place | None:
             or Place.objects.create(tree=tree, name=name))
 
 
-def _create_person(tree, data: dict) -> Person:
+def create_person(tree, data: dict) -> Person:
     sex = data.get("sex") if data.get("sex") in Person.Sex.values else Person.Sex.UNKNOWN
     person = Person(tree=tree, given_name=_text(data, "given_name"), patronymic=_text(data, "patronymic"),
                     birth_surname=_text(data, "birth_surname"), sex=sex,
@@ -72,7 +72,7 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
             raise EditError("У этой семьи уже указаны оба родителя.")
 
     tree = person.tree
-    new = _create_person(tree, data)
+    new = create_person(tree, data)
 
     if relation == "child":
         new.parent_family = family or Family.objects.create(tree=tree, partner1=person)
