@@ -18,8 +18,16 @@ from .bridge import build_tree, root_id, tree_payload
 from .editing import (EditError, add_material, add_relative, delete_person, deletion_summary, error_text,
                       save_key_events)
 from .forms import DATE_HINT, person_forms
-from .models import Event, Person, Place, Source
+from .models import Event, FamilyTree, Person, Place, Source
 from .timeline import timeline
+
+# Все страницы — только после входа (LoginRequiredMiddleware в настройках) и только
+# со своим древом: человека из чужого древа не найти даже по прямой ссылке.
+
+
+def user_tree(request) -> FamilyTree:
+    tree, _ = FamilyTree.objects.get_or_create(owner=request.user)
+    return tree
 
 
 @ensure_csrf_cookie          # браузеру нужен CSRF-токен для добавления людей
@@ -28,13 +36,14 @@ def tree_page(request):
 
 
 def tree_api(request):
-    return JsonResponse(tree_payload())
+    return JsonResponse(tree_payload(user_tree(request)))
 
 
 def tree_svg(request):
     """Всё древо одним SVG — для печати."""
-    tree = build_tree()
-    root = root_id(tree)
+    family_tree = user_tree(request)
+    tree = build_tree(family_tree)
+    root = root_id(family_tree, tree)
     if root is None:
         return HttpResponse("Древо пустое", status=404)
     svg = render_svg(tree, compute_layout(tree, root), root=root)
@@ -64,7 +73,7 @@ def _event(e: Event):
 def person_api(request, pk):
     person = get_object_or_404(
         Person.objects.prefetch_related("events__place", "names", "citations__source__files",
-                                        "citations__event"), pk=pk)
+                                        "citations__event"), pk=pk, tree=user_tree(request))
     own = list(person.events.all())
     key = []
     for kind in ("BIRT", "CHR", "DEAT", "BURI"):
@@ -116,7 +125,7 @@ def person_api(request, pk):
 @require_POST
 def add_relative_api(request, pk):
     """«+» на карточке: создать нового родственника. Тело — JSON с полями формы."""
-    person = get_object_or_404(Person, pk=pk)
+    person = get_object_or_404(Person, pk=pk, tree=user_tree(request))
     try:
         body = json.loads(request.body or b"{}")
     except ValueError:
@@ -145,7 +154,8 @@ def _person_context(person, forms_, notice="", notice_kind="info", delete_error=
         "families": families,
         "sources": materials(person, Source.Category.SOURCE),
         "memories": materials(person, Source.Category.MEMORY),
-        "places": Place.objects.values_list("name", flat=True), "date_hint": DATE_HINT,
+        "places": Place.objects.filter(tree=person.tree).values_list("name", flat=True),
+        "date_hint": DATE_HINT,
         "blockers": person.deletion_blockers(),
         "summary": deletion_summary(person),
         "notice": notice, "notice_kind": notice_kind, "delete_error": delete_error,
@@ -177,7 +187,7 @@ MATERIAL_TABS = {Source.Category.SOURCE: ("sources", "_person_sources.html"),
 @require_POST
 def add_material_view(request, code):
     """«Добавить» во вкладке «Источники» или «Воспоминания»: изображение, название, дата события."""
-    person = get_object_or_404(Person, code=code)
+    person = get_object_or_404(Person, code=code, tree=user_tree(request))
     category = request.POST.get("category", "")
     is_fetch = request.headers.get("X-Requested-With") == "fetch"
     try:
@@ -220,7 +230,7 @@ def person_page(request, code):
     поэтому в истории браузера не копятся одинаковые страницы. Без JS работает
     обычная отправка формы с переадресацией.
     """
-    person = get_object_or_404(Person, code=code)
+    person = get_object_or_404(Person, code=code, tree=user_tree(request))
     is_fetch = request.headers.get("X-Requested-With") == "fetch"
     forms_ = person_forms(person)
     notice, notice_kind, delete_error = "", "info", ""

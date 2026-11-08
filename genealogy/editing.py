@@ -24,23 +24,25 @@ def _text(data: dict, key: str) -> str:
     return " ".join(str(value).split())
 
 
-def find_or_create_place(name: str) -> Place | None:
+def find_or_create_place(tree, name: str) -> Place | None:
+    """Место по названию (без учёта регистра) в этом древе; если такого нет — новое."""
     if not name:
         return None
-    return Place.objects.filter(name__iexact=name).first() or Place.objects.create(name=name)
+    return (Place.objects.filter(tree=tree, name__iexact=name).first()
+            or Place.objects.create(tree=tree, name=name))
 
 
-def _create_person(data: dict) -> Person:
+def _create_person(tree, data: dict) -> Person:
     sex = data.get("sex") if data.get("sex") in Person.Sex.values else Person.Sex.UNKNOWN
-    person = Person(given_name=_text(data, "given_name"), patronymic=_text(data, "patronymic"),
+    person = Person(tree=tree, given_name=_text(data, "given_name"), patronymic=_text(data, "patronymic"),
                     birth_surname=_text(data, "birth_surname"), sex=sex,
                     is_living=bool(data.get("is_living")))
-    person.full_clean(exclude=["code", "parent_family"])
+    person.full_clean(exclude=["tree", "code", "parent_family"])
     person.save()
     date, place = _text(data, "birth_date"), _text(data, "birth_place")
     if date or place:
         Event.objects.create(person=person, kind=Event.Kind.BIRTH, date=date,
-                             place=find_or_create_place(place))
+                             place=find_or_create_place(tree, place))
     return person
 
 
@@ -69,14 +71,15 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
         if relation == "spouse" and family.partner1_id and family.partner2_id:
             raise EditError("У этой семьи уже указаны оба родителя.")
 
-    new = _create_person(data)
+    tree = person.tree
+    new = _create_person(tree, data)
 
     if relation == "child":
-        new.parent_family = family or Family.objects.create(partner1=person)
+        new.parent_family = family or Family.objects.create(tree=tree, partner1=person)
         new.save(update_fields=["parent_family"])
     elif relation == "spouse":
         if family is None:
-            Family.objects.create(partner1=person, partner2=new)
+            Family.objects.create(tree=tree, partner1=person, partner2=new)
         elif family.partner1_id:
             family.partner2 = new
             family.save(update_fields=["partner2"])
@@ -85,7 +88,7 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
             family.save(update_fields=["partner1"])
     elif relation == "parent":
         if parents is None:
-            person.parent_family = Family.objects.create(partner1=new)
+            person.parent_family = Family.objects.create(tree=tree, partner1=new)
             person.save(update_fields=["parent_family"])
         elif not parents.partner1_id:
             parents.partner1 = new
@@ -95,7 +98,7 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
             parents.save(update_fields=["partner2"])
     else:  # sibling
         if parents is None:
-            parents = Family.objects.create()
+            parents = Family.objects.create(tree=tree)
             person.parent_family = parents
             person.save(update_fields=["parent_family"])
         new.parent_family = parents
@@ -116,13 +119,13 @@ def save_key_events(person: Person, events: dict[str, Event], data: dict) -> Non
         if event is None:
             if date or place:
                 Event.objects.create(person=person, kind=kind, date=date,
-                                     place=find_or_create_place(place))
+                                     place=find_or_create_place(person.tree, place))
             continue
         if not date and not place and not event.value and not event.description \
                 and not event.citations.exists():
             event.delete()
             continue
-        event.date, event.place = date, find_or_create_place(place)
+        event.date, event.place = date, find_or_create_place(person.tree, place)
         event.save()
 
 
@@ -173,12 +176,13 @@ def add_material(person: Person, category: str, upload, title: str = "", date: s
     if Path(upload.name).suffix.lower().lstrip(".") not in IMAGE_EXTENSIONS:
         raise EditError("Можно загрузить только изображение: JPG, PNG, GIF, WEBP, TIFF или BMP.")
     digest = file_sha256(upload)
-    same = SourceFile.objects.select_related("source").filter(sha256=digest, source__category=category).first()
+    same = SourceFile.objects.select_related("source").filter(
+        sha256=digest, source__category=category, source__tree=person.tree).first()
     if same:
         source, existed = same.source, True
     else:
         source = Source.objects.create(
-            category=category, title=" ".join(title.split()) or Path(upload.name).stem,
+            tree=person.tree, category=category, title=" ".join(title.split()) or Path(upload.name).stem,
             kind=Source.Kind.PHOTO if category == Source.Category.MEMORY else Source.Kind.OTHER,
             date=" ".join(date.split()))
         SourceFile.objects.create(source=source, file=upload, sha256=digest)

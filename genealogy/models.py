@@ -3,11 +3,75 @@
 Ключевая идея та же, что в ядре: ребёнок принадлежит СЕМЬЕ (союзу двух людей),
 а не отдельному родителю. Повторный брак — это ещё одна семья.
 Ни одно поле человека не обязательно.
+
+У каждого пользователя своё древо (FamilyTree): люди, семьи, места и материалы
+принадлежат древу, номера P0001, P0002, … считаются внутри древа.
 """
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from tree_engine.model import FuzzyDate, normalize_date
+
+
+class FamilyTree(models.Model):
+    """Древо одного пользователя."""
+    owner = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE,
+                                 related_name="family_tree", verbose_name="владелец")
+    root_person = models.ForeignKey("Person", null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+", verbose_name="опорный человек (поколение 1)")
+    next_number = models.PositiveIntegerField("следующий номер", default=1,
+                                              help_text="Номер, который получит следующий новый человек.")
+    created = models.DateTimeField("создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "древо"
+        verbose_name_plural = "древа"
+
+    def __str__(self):
+        return f"Древо {self.owner}" if self.owner else f"Древо №{self.pk} (без владельца)"
+
+    def take_number(self) -> str:
+        """Следующий номер человека: P0001, P0002, … Номера удалённых не переиспользуются."""
+        FamilyTree.objects.filter(pk=self.pk).update(next_number=models.F("next_number") + 1)
+        self.refresh_from_db(fields=["next_number"])
+        return f"P{self.next_number - 1:04d}"
+
+
+def _invitation_code() -> str:
+    return secrets.token_urlsafe(18)
+
+
+def _invitation_expires():
+    return timezone.now() + timedelta(days=14)
+
+
+class Invitation(models.Model):
+    """Приглашение — одноразовая ссылка на регистрацию. Создаётся в админке."""
+    code = models.CharField("код", max_length=40, unique=True, default=_invitation_code, editable=False)
+    note = models.CharField("для кого", max_length=120, blank=True,
+                            help_text="Только для вас: кому отправили ссылку.")
+    created = models.DateTimeField("создано", auto_now_add=True)
+    expires = models.DateTimeField("действует до", default=_invitation_expires)
+    used_by = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="+", verbose_name="кто зарегистрировался", editable=False)
+    used_at = models.DateTimeField("когда использовано", null=True, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "приглашение"
+        verbose_name_plural = "приглашения"
+        ordering = ["-created"]
+
+    def __str__(self):
+        return self.note or f"Приглашение от {self.created:%d.%m.%Y}"
+
+    @property
+    def is_usable(self) -> bool:
+        return self.used_at is None and self.expires > timezone.now()
 
 
 class Person(models.Model):
@@ -16,7 +80,9 @@ class Person(models.Model):
         FEMALE = "F", "Женский"
         UNKNOWN = "U", "Неизвестен"
 
-    code = models.CharField("номер", max_length=12, unique=True, blank=True, editable=False)
+    tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="people",
+                             verbose_name="древо")
+    code = models.CharField("номер", max_length=12, blank=True, editable=False)
     given_name = models.CharField("имя", max_length=120, blank=True)
     patronymic = models.CharField("отчество", max_length=120, blank=True)
     birth_surname = models.CharField(
@@ -40,16 +106,16 @@ class Person(models.Model):
         verbose_name = "человек"
         verbose_name_plural = "люди"
         ordering = ["code"]
+        constraints = [models.UniqueConstraint(fields=["tree", "code"], name="person_code_unique_in_tree")]
 
     def __str__(self):
         name = " ".join(x for x in (self.given_name, self.patronymic, self.birth_surname) if x)
         return f"{name or '?'} ({self.code})"
 
     def save(self, *args, **kwargs):
+        if not self.code:      # собственная нумерация внутри древа: P0001, P0002, …
+            self.code = self.tree.take_number()
         super().save(*args, **kwargs)
-        if not self.code:      # собственная нумерация: P0001, P0002, …
-            self.code = f"P{self.pk:04d}"
-            super().save(update_fields=["code"])
 
     @property
     def full_name(self) -> str:
@@ -62,11 +128,13 @@ class Person(models.Model):
     def deletion_blockers(self) -> list[str]:
         from tree_engine.model import deletion_blockers
         from .bridge import build_tree
-        return deletion_blockers(build_tree(), str(self.pk))
+        return deletion_blockers(build_tree(self.tree), str(self.pk))
 
 
 class Family(models.Model):
     """Союз (брак или пара). Партнёров 0–2: неизвестный родитель — пустое поле."""
+    tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="families",
+                             verbose_name="древо")
     partner1 = models.ForeignKey(Person, verbose_name="партнёр 1", null=True, blank=True,
                                  on_delete=models.SET_NULL, related_name="+")
     partner2 = models.ForeignKey(Person, verbose_name="партнёр 2", null=True, blank=True,
@@ -91,7 +159,9 @@ class Family(models.Model):
 
 
 class Place(models.Model):
-    name = models.CharField("название", max_length=255, unique=True,
+    tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="places",
+                             verbose_name="древо")
+    name = models.CharField("название", max_length=255,
                             help_text="Например: Boskovice, Blansko, Чехия")
     latitude = models.FloatField("широта", null=True, blank=True)
     longitude = models.FloatField("долгота", null=True, blank=True)
@@ -101,6 +171,7 @@ class Place(models.Model):
         verbose_name = "место"
         verbose_name_plural = "места"
         ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["tree", "name"], name="place_name_unique_in_tree")]
 
     def __str__(self):
         return self.name
@@ -218,6 +289,8 @@ class Source(models.Model):
         LETTER = "letter", "Письмо / личный документ"
         OTHER = "other", "Другое"
 
+    tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="sources",
+                             verbose_name="древо")
     category = models.CharField("раздел", max_length=8, choices=Category.choices,
                                 default=Category.SOURCE)
     title = models.CharField("название", max_length=255)
@@ -288,21 +361,3 @@ class Citation(models.Model):
 
     def __str__(self):
         return f"{self.source} → {self.person}"
-
-
-class TreeSettings(models.Model):
-    """Единственная запись: от кого считать поколения."""
-    root_person = models.ForeignKey(Person, null=True, blank=True, on_delete=models.SET_NULL,
-                                    verbose_name="опорный человек (поколение 1)")
-
-    class Meta:
-        verbose_name = "настройки древа"
-        verbose_name_plural = "настройки древа"
-
-    def __str__(self):
-        return "Настройки древа"
-
-    @classmethod
-    def get(cls) -> "TreeSettings":
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj

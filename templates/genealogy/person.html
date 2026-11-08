@@ -11,7 +11,13 @@
 <body>
 <header class="masthead">
   <div class="masthead-inner">
-    <nav class="top"><a href="{% url 'tree' %}#{{ person.code }}">← К древу</a></nav>
+    <nav class="top">
+      <a href="{% url 'tree' %}#{{ person.code }}">← К древу</a>
+      <form class="logout" method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <span>{{ user.username }}</span> · <button type="submit">Выйти</button>
+      </form>
+    </nav>
     <div id="person-header">{% include "genealogy/_person_header.html" %}</div>
     {# Вкладки — ссылки на #адрес: «Назад» в браузере возвращает на предыдущую вкладку, а с первой — к древу. #}
     <nav class="tabs" role="tablist" aria-label="Разделы карточки">

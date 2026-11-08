@@ -5,22 +5,24 @@ from tree_engine import model as engine
 from tree_engine.layout import CARD_H, CARD_W, compute_layout
 from tree_engine.render_svg import line_jumps, rounded_path
 
-from .models import Event, Family, Person, TreeSettings
+from .models import Event, Family, FamilyTree, Person
 
 
-def build_tree() -> engine.Tree:
+def build_tree(family_tree: FamilyTree) -> engine.Tree:
+    """Древо пользователя из базы — в структуру ядра."""
     tree = engine.Tree()
-    for p in Person.objects.all():
+    for p in Person.objects.filter(tree=family_tree):
         tree.people[str(p.pk)] = engine.Person(
             id=str(p.pk), given=p.given_name, patronymic=p.patronymic,
             surname=p.birth_surname, sex=p.sex, living=p.is_living,
             parent_family=str(p.parent_family_id) if p.parent_family_id else None)
-    for e in Event.objects.select_related("place").filter(person__isnull=False):
+    for e in Event.objects.select_related("place").filter(person__tree=family_tree):
         tree.people[str(e.person_id)].events.append(engine.Event(
             kind=e.kind, date=engine.FuzzyDate(e.date) if e.date else None,
             place=e.place.name if e.place else ""))
-    orders = {str(p.pk): p.child_order for p in Person.objects.exclude(child_order=None)}
-    for f in Family.objects.all():
+    orders = {str(p.pk): p.child_order
+              for p in Person.objects.filter(tree=family_tree).exclude(child_order=None)}
+    for f in Family.objects.filter(tree=family_tree):
         fid = str(f.pk)
         partners = [str(x) for x in (f.partner1_id, f.partner2_id) if x]
         tree.families[fid] = engine.Family(id=fid, partners=partners)
@@ -34,23 +36,24 @@ def build_tree() -> engine.Tree:
     return tree
 
 
-def root_id(tree: engine.Tree) -> str | None:
-    root = TreeSettings.get().root_person_id
+def root_id(family_tree: FamilyTree, tree: engine.Tree) -> str | None:
+    """Опорный человек (от него считаются поколения); если не задан — первый в древе."""
+    root = family_tree.root_person_id
     if root and str(root) in tree.people:
         return str(root)
     return next(iter(tree.people), None)
 
 
-def tree_payload() -> dict:
+def tree_payload(family_tree: FamilyTree) -> dict:
     """Всё, что нужно браузеру для отрисовки: люди, координаты, линии."""
-    tree = build_tree()
-    root = root_id(tree)
+    tree = build_tree(family_tree)
+    root = root_id(family_tree, tree)
     if root is None:
         return {"people": {}, "families": {}, "boxes": [], "unions": [], "lines": [], "rows": [],
                 "width": 800, "height": 400, "card": {"w": CARD_W, "h": CARD_H},
                 "root": None, "warnings": []}
     layout = compute_layout(tree, root)
-    codes = dict(Person.objects.values_list("pk", "code"))
+    codes = dict(Person.objects.filter(tree=family_tree).values_list("pk", "code"))
     people = {}
     for pid, p in tree.people.items():
         birth = p.birth

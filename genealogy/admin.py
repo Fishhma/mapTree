@@ -1,12 +1,14 @@
 """Админка Django — временный редактор, пока не сделаны свои формы на странице древа."""
 from django import forms
 from django.contrib import admin, messages
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import format_html
 
 from tree_engine.model import to_user_date
 
-from .models import (Citation, Event, Family, Person, PersonName, Place, Source, SourceFile,
-                     TreeSettings)
+from .models import (Citation, Event, Family, FamilyTree, Invitation, Person, PersonName, Place, Source,
+                     SourceFile)
 
 
 class FriendlyDateForm(forms.ModelForm):
@@ -63,9 +65,9 @@ class ChildInline(admin.TabularInline):
 class PersonAdmin(admin.ModelAdmin):
     list_display = ("code", "given_name", "patronymic", "birth_surname", "sex", "parent_family")
     search_fields = ("code", "given_name", "patronymic", "birth_surname", "names__surname")
-    list_filter = ("sex",)
+    list_filter = ("tree", "sex")
     autocomplete_fields = ("parent_family",)
-    fields = ("code", "given_name", "patronymic", "birth_surname", "sex",
+    fields = ("tree", "code", "given_name", "patronymic", "birth_surname", "sex",
               "parent_family", "child_order", "notes")
     readonly_fields = ("code",)
     inlines = [PersonEventInline, NameInline, PersonCitationInline]
@@ -143,9 +145,41 @@ class EventAdmin(admin.ModelAdmin):
     autocomplete_fields = ("person", "family", "place")
 
 
-@admin.register(TreeSettings)
-class TreeSettingsAdmin(admin.ModelAdmin):
+@admin.register(FamilyTree)
+class FamilyTreeAdmin(admin.ModelAdmin):
+    list_display = ("__str__", "people_count", "root_person", "created")
     autocomplete_fields = ("root_person",)
+    readonly_fields = ("created",)
 
-    def has_add_permission(self, request):
-        return not TreeSettings.objects.exists()
+    @admin.display(description="людей")
+    def people_count(self, obj):
+        return obj.people.count()
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    """Приглашения: создайте, скопируйте ссылку и отправьте человеку. Ссылка одноразовая."""
+    list_display = ("__str__", "status", "link", "expires", "used_by")
+    fields = ("note", "expires", "link", "used_by", "used_at")
+    readonly_fields = ("link", "used_by", "used_at")
+
+    def get_readonly_fields(self, request, obj=None):
+        self._request = request          # для полной ссылки с адресом сайта
+        return super().get_readonly_fields(request, obj)
+
+    def get_list_display(self, request):
+        self._request = request
+        return super().get_list_display(request)
+
+    @admin.display(description="ссылка для регистрации")
+    def link(self, obj):
+        if not obj.pk:
+            return "появится после сохранения"
+        url = self._request.build_absolute_uri(reverse("register", args=[obj.code]))
+        return format_html('<input type="text" readonly value="{}" size="60" onclick="this.select()">', url)
+
+    @admin.display(description="состояние")
+    def status(self, obj):
+        if obj.used_at:
+            return "использовано"
+        return "действует" if obj.expires > timezone.now() else "истекло"

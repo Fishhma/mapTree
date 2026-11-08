@@ -23,7 +23,12 @@ a { color: var(--ink); }
 /* ---------- шапка и вкладки ---------- */
 .masthead { background: var(--surface); border-top: 6px solid var(--ink); border-bottom: 1px solid var(--hairline); }
 .masthead-inner { max-width: 1120px; margin: 0 auto; padding: 14px 16px 0; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .top a { text-decoration: none; color: var(--muted); }
+.top .logout { margin: 0; color: var(--muted); }
+.top .logout button { padding: 0; border: 0; background: none; font: inherit; color: var(--muted);
+                      text-decoration: underline; cursor: pointer; }
+.top .logout button:hover { color: var(--ink); }
 .top a:hover { color: var(--ink); }
 
 .head { display: flex; gap: 14px; align-items: stretch; margin: 14px 0 10px; }

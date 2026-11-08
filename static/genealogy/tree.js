@@ -549,8 +549,7 @@ async function init() {
     return;
   }
   if (!data.boxes.length) {
-    const m = showMessage("Древо пока пустое. Загрузите GEDCOM: ");
-    m.append(h("code", {}, "python manage.py import_gedcom файл.ged --root @I1@"));
+    showMessage("Древо пока пустое.");
     return;
   }
   const fromHash = Object.entries(data.people).find(([, p]) => "#" + p.code === location.hash);

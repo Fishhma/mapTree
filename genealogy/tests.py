@@ -2,17 +2,23 @@
 import unittest
 from pathlib import Path
 
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.test import TestCase
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
+from django.test import Client, TestCase, TransactionTestCase
+from django.utils import timezone
 
-from .models import Event, Family, Person, Place, Source, SourceFile, TreeSettings
+from .models import Event, Family, FamilyTree, Invitation, Person, Place, Source, SourceFile
 
 GED = Path(__file__).resolve().parent.parent / "tests" / "rootsmagic_tree.ged"
 
 
 def family(p1=None, p2=None, children=()):
-    f = Family.objects.create(partner1=p1, partner2=p2)
+    tree = next(x.tree for x in (p1, p2, *children) if x)
+    f = Family.objects.create(tree=tree, partner1=p1, partner2=p2)
     for c in children:
         c.parent_family = f
         c.save()
@@ -20,10 +26,19 @@ def family(p1=None, p2=None, children=()):
 
 
 class SmallTreeMixin:
-    """Дед → Libor (два брака: Ondřej от первого, Marian от второго) + дядя."""
+    """Владелец древа уже вошёл на сайт. make_tree():
+    Дед → Libor (два брака: Ondřej от первого, Marian от второго) + дядя."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("owner", password="Древо-пароль-1")
+        self.tree = FamilyTree.objects.create(owner=self.user)
+        self.client.force_login(self.user)
+
+    def person(self, **fields):
+        return Person.objects.create(tree=self.tree, **fields)
 
     def make_tree(self):
-        P = lambda name, sex="M": Person.objects.create(given_name=name, sex=sex)  # noqa: E731
+        P = lambda name, sex="M": self.person(given_name=name, sex=sex)  # noqa: E731
         self.ded, self.libor, self.uncle = P("Дед"), P("Libor"), P("Дядя")
         self.wife1, self.julia = P("Жена 1", "F"), P("Юлия", "F")
         self.ondrej, self.marian = P("Ondřej"), P("Marian")
@@ -32,24 +47,23 @@ class SmallTreeMixin:
         family(self.libor, self.julia, [self.marian])
         Event.objects.create(person=self.ondrej, kind="BIRT", date="1986")
         Event.objects.create(person=self.marian, kind="BIRT", date="6.1.2007")
-        s = TreeSettings.get()
-        s.root_person = self.marian
-        s.save()
+        self.tree.root_person = self.marian
+        self.tree.save()
 
 
 class ModelTest(SmallTreeMixin, TestCase):
     def test_own_numbering(self):
-        a, b = Person.objects.create(), Person.objects.create()
+        a, b = self.person(), self.person()
         self.assertRegex(a.code, r"^P\d{4}$")
         self.assertEqual(int(b.code[1:]), int(a.code[1:]) + 1)
 
     def test_person_without_any_data_is_allowed(self):
-        p = Person.objects.create()
+        p = self.person()
         self.assertEqual(p.given_name, "")
         self.assertIn("?", str(p))
 
     def test_dates_are_normalized_and_sorted(self):
-        p = Person.objects.create()
+        p = self.person()
         e = Event.objects.create(person=p, kind="BIRT", date="10.08.1962")
         self.assertEqual(e.date, "10 AUG 1962")
         self.assertEqual(e.date_display, "10 августа 1962")
@@ -65,6 +79,7 @@ class ModelTest(SmallTreeMixin, TestCase):
 
 class DeletionTest(SmallTreeMixin, TestCase):
     def setUp(self):
+        super().setUp()
         self.make_tree()
         self.admin = User.objects.create_superuser("admin", "a@a.cz", "pw")
         self.client.force_login(self.admin)
@@ -86,7 +101,7 @@ class DeletionTest(SmallTreeMixin, TestCase):
 
     def test_hollow_family_removed_after_deleting_childless_partner(self):
         # Случай Josef Maňas: удалили бездетную жену — от брака не должен остаться отросток.
-        lone = Person.objects.create(given_name="Бездетная")
+        lone = self.person(given_name="Бездетная")
         fam = family(self.uncle, lone)
         lone.delete()
         self.assertFalse(Family.objects.filter(pk=fam.pk).exists())
@@ -100,7 +115,7 @@ class DeletionTest(SmallTreeMixin, TestCase):
     def test_migration_cleanup_function_removes_only_hollow_families(self):
         from .signals import drop_hollow_families
         hollow = family(self.uncle)                                 # один партнёр, без детей
-        kept = family(self.uncle, None, [Person.objects.create()])  # один партнёр, но есть ребёнок
+        kept = family(self.uncle, None, [self.person()])  # один партнёр, но есть ребёнок
         self.assertEqual(drop_hollow_families(), 1)
         self.assertFalse(Family.objects.filter(pk=hollow.pk).exists())
         self.assertTrue(Family.objects.filter(pk=kept.pk).exists())
@@ -108,7 +123,8 @@ class DeletionTest(SmallTreeMixin, TestCase):
     def test_admin_pages_open(self):
         for url in ["/admin/", "/admin/genealogy/person/", f"/admin/genealogy/person/{self.libor.pk}/change/",
                     "/admin/genealogy/family/", f"/admin/genealogy/family/{self.libor.families.first().pk}/change/",
-                    "/admin/genealogy/source/add/", "/admin/genealogy/place/", "/admin/genealogy/treesettings/"]:
+                    "/admin/genealogy/source/add/", "/admin/genealogy/place/", "/admin/genealogy/familytree/",
+                    "/admin/genealogy/invitation/", "/admin/genealogy/invitation/add/"]:
             self.assertEqual(self.client.get(url).status_code, 200, url)
 
 
@@ -150,6 +166,7 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
     """«+» на карточке: POST /api/people/<pk>/add/."""
 
     def setUp(self):
+        super().setUp()
         self.make_tree()
 
     def add(self, person, relation, **fields):
@@ -191,7 +208,7 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
 
     def test_spouse_becomes_other_parent_of_children(self):
         # Случай Maňas: у Josef дочь, мать неизвестна; добавляем жену как её мать.
-        josef, renata = Person.objects.create(given_name="Josef"), Person.objects.create(given_name="Renata")
+        josef, renata = self.person(given_name="Josef"), self.person(given_name="Renata")
         fam = family(josef, None, [renata])
         tatana = self.new_person(self.add(josef, "spouse", family=fam.pk, given_name="Taťána", sex="F"))
         fam.refresh_from_db()
@@ -202,14 +219,14 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
         self.assertEqual(tree["families"][str(fam.pk)]["children"], [str(renata.pk)])
 
     def test_spouse_fills_first_slot_if_person_is_second(self):
-        mother, kid = Person.objects.create(given_name="Мать"), Person.objects.create(given_name="Ребёнок")
+        mother, kid = self.person(given_name="Мать"), self.person(given_name="Ребёнок")
         fam = family(None, mother, [kid])
         father = self.new_person(self.add(mother, "spouse", family=fam.pk))
         fam.refresh_from_db()
         self.assertEqual((fam.partner1, fam.partner2), (father, mother))
 
     def test_spouse_as_new_marriage_when_family_not_chosen(self):
-        josef, renata = Person.objects.create(given_name="Josef"), Person.objects.create(given_name="Renata")
+        josef, renata = self.person(given_name="Josef"), self.person(given_name="Renata")
         fam = family(josef, None, [renata])
         self.new_person(self.add(josef, "spouse", family=""))
         self.assertEqual(josef.families.count(), 2)
@@ -250,8 +267,9 @@ class AddRelativeTest(SmallTreeMixin, TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_csrf_is_required(self):
-        from django.test import Client
-        r = Client(enforce_csrf_checks=True).post(f"/api/people/{self.marian.pk}/add/", {"relation": "child"},
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        r = client.post(f"/api/people/{self.marian.pk}/add/", {"relation": "child"},
                                                  content_type="application/json")
         self.assertEqual(r.status_code, 403)
 
@@ -260,6 +278,7 @@ class PersonPageTest(SmallTreeMixin, TestCase):
     """Страница /people/P0001/: вкладки, правка и удаление только здесь."""
 
     def setUp(self):
+        super().setUp()
         self.make_tree()
 
     def url(self, person):
@@ -408,6 +427,7 @@ class MaterialsTest(SmallTreeMixin, TestCase):
         import shutil
         import tempfile
         from django.test import override_settings
+        super().setUp()
         self.make_tree()
         media = tempfile.mkdtemp()                     # файлы тестов — не в настоящий media/
         self.addCleanup(shutil.rmtree, media, ignore_errors=True)
@@ -464,13 +484,144 @@ class MaterialsTest(SmallTreeMixin, TestCase):
 
 
 @unittest.skipUnless(GED.exists(), "нет tests/rootsmagic_tree.ged")
-class ImportTest(TestCase):
+class ImportTest(SmallTreeMixin, TestCase):
     def test_import_real_file(self):
-        call_command("import_gedcom", str(GED), root="@I1@", verbosity=0)
-        self.assertEqual(Person.objects.count(), 108)
-        self.assertEqual(Family.objects.count(), 47)
-        root = TreeSettings.get().root_person
-        self.assertEqual((root.given_name, root.birth_surname), ("Marian", "Hanus"))
+        call_command("import_gedcom", str(GED), user="owner", root="@I1@", verbosity=0)
+        self.assertEqual(Person.objects.filter(tree=self.tree).count(), 108)
+        self.assertEqual(Family.objects.filter(tree=self.tree).count(), 47)
+        self.tree.refresh_from_db()
+        root = self.tree.root_person
+        self.assertEqual((root.given_name, root.birth_surname, root.code), ("Marian", "Hanus", "P0001"))
         data = self.client.get("/api/tree/").json()
         self.assertEqual(len(data["boxes"]), 108)
         self.assertEqual(len(data["rows"]), 9)
+
+
+class SeparateTreesTest(SmallTreeMixin, TestCase):
+    """У каждого пользователя своё древо: чужих людей не видно даже по прямой ссылке."""
+
+    def setUp(self):
+        super().setUp()
+        self.make_tree()
+        self.other = User.objects.create_user("guest", password="Древо-пароль-2")
+        self.other_tree = FamilyTree.objects.create(owner=self.other)
+        self.stranger = Person.objects.create(tree=self.other_tree, given_name="Чужой")
+
+    def test_login_required_everywhere(self):
+        anon = Client()
+        for url in ["/", "/api/tree/", f"/api/people/{self.libor.pk}/", f"/people/{self.libor.code}/",
+                    "/tree.svg"]:
+            r = anon.get(url)
+            self.assertEqual(r.status_code, 302, url)
+            self.assertTrue(r["Location"].startswith("/login/"), url)
+        self.assertContains(anon.get("/login/"), "Вход")
+
+    def test_numbering_is_per_tree_and_not_reused(self):
+        self.assertEqual(self.libor.code[:1], "P")
+        self.assertEqual(self.stranger.code, "P0001")                 # своя нумерация у второго древа
+        codes = sorted(Person.objects.filter(tree=self.tree).values_list("code", flat=True))
+        self.assertEqual(codes, [f"P{i:04d}" for i in range(1, 8)])
+        self.ondrej.delete()                                          # P0006
+        self.assertEqual(self.person().code, "P0008")                 # номер удалённого не занимается
+
+    def test_other_users_people_are_invisible(self):
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(f"/people/{self.libor.code}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/people/{self.libor.pk}/").status_code, 404)
+        r = self.client.post(f"/api/people/{self.libor.pk}/add/", {"relation": "child"},
+                             content_type="application/json")
+        self.assertEqual(r.status_code, 404)
+        data = self.client.get("/api/tree/").json()
+        self.assertEqual([b["id"] for b in data["boxes"]], [str(self.stranger.pk)])
+        self.assertContains(self.client.get(f"/people/{self.stranger.code}/"), "Чужой")
+
+    def test_same_place_name_in_two_trees(self):
+        from .editing import find_or_create_place
+        a = find_or_create_place(self.tree, "Brno")
+        b = find_or_create_place(self.other_tree, "brno")
+        self.assertNotEqual(a.pk, b.pk)
+        self.assertEqual(find_or_create_place(self.tree, "BRNO"), a)
+
+    def test_logout(self):
+        r = self.client.post("/logout/")
+        self.assertRedirects(r, "/login/")
+        self.assertEqual(self.client.get("/").status_code, 302)
+
+
+class InvitationTest(TestCase):
+    """Регистрация — только по одноразовой ссылке-приглашению."""
+
+    def setUp(self):
+        self.invitation = Invitation.objects.create(note="Для мамы")
+        self.url = f"/invite/{self.invitation.code}/"
+
+    def register(self, client=None, username="mama"):
+        return (client or self.client).post(self.url, {"username": username, "password1": "Velka-rodina-1890",
+                                                       "password2": "Velka-rodina-1890"})
+
+    def test_registration_creates_user_with_own_empty_tree(self):
+        page = self.client.get(self.url)
+        self.assertContains(page, "Регистрация")
+        self.assertContains(page, "Логин")
+        r = self.register()
+        self.assertRedirects(r, "/")
+        user = User.objects.get(username="mama")
+        self.assertEqual(user.family_tree.people.count(), 0)
+        self.invitation.refresh_from_db()
+        self.assertEqual(self.invitation.used_by, user)
+        self.assertEqual(self.client.get("/").status_code, 200)       # уже вошла
+
+    def test_link_works_only_once(self):
+        self.register()
+        r = self.register(Client(), username="kdo-jiny")
+        self.assertContains(r, "уже зарегистрировались", status_code=404)
+        self.assertFalse(User.objects.filter(username="kdo-jiny").exists())
+
+    def test_expired_and_unknown_links(self):
+        Invitation.objects.filter(pk=self.invitation.pk).update(expires=timezone.now() - timedelta(days=1))
+        self.assertContains(self.client.get(self.url), "Срок действия", status_code=404)
+        self.assertContains(self.client.get("/invite/nesmysl/"), "Такой ссылки нет", status_code=404)
+
+    def test_weak_password_is_refused(self):
+        r = self.client.post(self.url, {"username": "mama", "password1": "12345678", "password2": "12345678"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(User.objects.filter(username="mama").exists())
+
+    def test_signed_in_user_cannot_use_invitation(self):
+        self.client.force_login(User.objects.create_user("owner", password="x"))
+        self.assertContains(self.client.get(self.url), "Вы уже вошли", status_code=400)
+
+    def test_admin_shows_copyable_link(self):
+        self.client.force_login(User.objects.create_superuser("admin", "a@a.cz", "pw"))
+        r = self.client.get(f"/admin/genealogy/invitation/{self.invitation.pk}/change/")
+        self.assertContains(r, f"http://testserver/invite/{self.invitation.code}/")
+
+
+class MigrationTest(TransactionTestCase):
+    """Перенос прежних данных в древо первого администратора (0005_family_trees)."""
+
+    before = [("genealogy", "0004_drop_hollow_families")]
+    after = [("genealogy", "0005_family_trees")]
+
+    def test_existing_data_becomes_tree_of_first_superuser(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.before)
+        old = executor.loader.project_state(self.before).apps
+        admin = User.objects.create(username="admin", is_superuser=True)
+        Person = old.get_model("genealogy", "Person")
+        marian = Person.objects.create(code="P0001", given_name="Marian")
+        Person.objects.create(code="P0007")
+        old.get_model("genealogy", "Place").objects.create(name="Brno")
+        old.get_model("genealogy", "TreeSettings").objects.create(pk=1, root_person=marian)
+
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        executor.migrate(self.after)
+        new = executor.loader.project_state(self.after).apps
+        tree = new.get_model("genealogy", "FamilyTree").objects.get()
+        self.assertEqual((tree.owner_id, tree.root_person_id, tree.next_number), (admin.pk, marian.pk, 8))
+        self.assertEqual(new.get_model("genealogy", "Person").objects.filter(tree=tree).count(), 2)
+        self.assertEqual(new.get_model("genealogy", "Place").objects.get().tree_id, tree.pk)
+        executor = MigrationExecutor(connection)                     # вернуть схему для других тестов
+        executor.loader.build_graph()
+        executor.migrate(executor.loader.graph.leaf_nodes())

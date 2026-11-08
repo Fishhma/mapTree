@@ -72,7 +72,8 @@ class OtherEventForm(forms.ModelForm):
             self.initial["place_name"] = self.instance.place.name if self.instance.place else ""
 
     def save(self, commit=True):
-        self.instance.place = find_or_create_place(" ".join(self.cleaned_data["place_name"].split()))
+        self.instance.place = find_or_create_place(self.instance.person.tree,
+                                                   " ".join(self.cleaned_data["place_name"].split()))
         return super().save(commit)
 
 

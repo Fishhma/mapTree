@@ -79,6 +79,7 @@ button, .button, input { font: inherit; color: inherit; }
 .search-results li:hover, .search-results li.active { background: var(--paper); }
 .search-results small { color: var(--muted); white-space: nowrap; }
 .stats { color: var(--muted); font-size: 13px; }
+@media (max-width: 1080px) { .stats { display: none; } }   /* иначе под кнопками справа */
 
 .controls { position: absolute; top: 14px; right: 16px; display: flex; gap: 6px; transition: right .2s; }
 body.panel-open .controls { right: calc(var(--panel-w) + 16px); }
@@ -87,6 +88,7 @@ body.panel-open .stats { display: none; }
   border-radius: 6px; background: var(--surface); cursor: pointer; text-decoration: none; font-size: 14px; }
 .controls button:hover, .controls .button:hover { border-color: var(--line); }
 .controls button:focus-visible, .controls .button:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.controls .logout { margin: 0 0 0 10px; }
 
 .message { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); margin: 0;
   max-width: 460px; text-align: center; color: var(--muted); }
