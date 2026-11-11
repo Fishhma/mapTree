@@ -7,8 +7,11 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.translation import gettext as _
+from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
+from django.views.i18n import JavaScriptCatalog
 
 from tree_engine.layout import compute_layout
 from tree_engine.model import FuzzyDate, lifespan
@@ -46,7 +49,7 @@ def tree_svg(request):
     tree = build_tree(family_tree)
     root = root_id(family_tree, tree)
     if root is None:
-        return HttpResponse("Древо пустое", status=404)
+        return HttpResponse(_("Древо пустое"), status=404)
     svg = render_svg(tree, compute_layout(tree, root), root=root)
     response = HttpResponse(svg, content_type="image/svg+xml; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="drevo.svg"'
@@ -130,9 +133,9 @@ def add_relative_api(request, pk):
     try:
         body = json.loads(request.body or b"{}")
     except ValueError:
-        return JsonResponse({"error": "Неверный запрос."}, status=400)
+        return JsonResponse({"error": _("Неверный запрос.")}, status=400)
     if not isinstance(body, dict):
-        return JsonResponse({"error": "Неверный запрос."}, status=400)
+        return JsonResponse({"error": _("Неверный запрос.")}, status=400)
     try:
         new = add_relative(person, body.get("relation"), body, body.get("family"))
     except (EditError, ValidationError) as exc:
@@ -270,3 +273,16 @@ def person_page(request, code):
             "about": render_to_string("genealogy/_person_about.html", context, request),
         }, status=400 if notice_kind == "error" else 200)
     return render(request, "genealogy/person.html", context)
+
+
+class JavaScriptTranslations(JavaScriptCatalog):
+    """Переводы для JS (gettext, ngettext, interpolate) — из locale/*/LC_MESSAGES/djangojs.po.
+
+    Стандартный каталог Django ищет переводы только в папках приложений, а наши лежат в LOCALE_PATHS.
+    """
+    def get_paths(self, packages):
+        from django.conf import settings
+        return [str(path) for path in settings.LOCALE_PATHS]
+
+
+js_translations = never_cache(JavaScriptTranslations.as_view())

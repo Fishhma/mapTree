@@ -13,15 +13,50 @@ from dataclasses import dataclass, field
 MONTHS = {m: i for i, m in enumerate(
     "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(), start=1)}
 MONTH_CODES = {i: m for m, i in MONTHS.items()}
-RU_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
-             "августа", "сентября", "октября", "ноября", "декабря"]
-RU_MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль",
-                 "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
+
+# Слова дат на языках интерфейса. Ядро не знает про Django: язык передаётся параметром
+# («ru», «en», «cs»); незнакомый язык — как русский.
+#   day   — «10 <месяц в род. падеже> 1962»: «10 августа 1962», «10 August 1962», «10. srpna 1962»
+#   month — «<месяц> 1962»: «август 1962», «August 1962», «srpen 1962»
+DATE_WORDS = {
+    "ru": {"day": "{d} {m} {y}",
+           "of": "января февраля марта апреля мая июня июля августа сентября октября ноября декабря",
+           "month": "январь февраль март апрель май июнь июль август сентябрь октябрь ноябрь декабрь",
+           "ABT": "около", "BEF": "до", "AFT": "после", "BET": "между {a} и {b}"},
+    "en": {"day": "{d} {m} {y}",
+           "of": "January February March April May June July August September October November December",
+           "month": "January February March April May June July August September October November December",
+           "ABT": "about", "BEF": "before", "AFT": "after", "BET": "between {a} and {b}"},
+    "cs": {"day": "{d}. {m} {y}",
+           "of": "ledna února března dubna května června července srpna září října listopadu prosince",
+           "month": "leden únor březen duben květen červen červenec srpen září říjen listopad prosinec",
+           "ABT": "kolem", "BEF": "před", "AFT": "po", "BET": "mezi {a} a {b}"},
+}
+RU_MONTHS = DATE_WORDS["ru"]["of"].split()          # прежние имена — для совместимости
+RU_MONTHS_NOM = DATE_WORDS["ru"]["month"].split()
+
+# Месяцы словом на входе — на любом из языков, в любом падеже: «августа», «August», «srpna», «Aug».
+MONTH_WORDS = {"май": 5}
+for _words in DATE_WORDS.values():
+    for _key in ("of", "month"):
+        for _i, _w in enumerate(_words[_key].split(), start=1):
+            MONTH_WORDS[_w.lower()] = _i
+for _code, _i in MONTHS.items():
+    MONTH_WORDS[_code.lower()] = _i
+MONTH_WORDS.update({"sept": 9})
+
+# Слова перед датой на входе (любой язык) → код GEDCOM. Длинные — раньше коротких.
 _PREFIXES = [  # (варианты ввода, код GEDCOM)
-    (("около", "ок.", "ок", "~", "abt", "circa", "ca", "cca", "asi"), "ABT"),
-    (("до", "<", "bef", "před"), "BEF"),
-    (("после", ">", "aft", "po"), "AFT"),
+    (("около", "ок.", "ок", "~", "abt", "about", "approx.", "approx", "circa", "ca.", "ca", "c.",
+      "cca", "asi", "kolem", "přibližně"), "ABT"),
+    (("до", "<", "bef", "before", "před"), "BEF"),
+    (("после", ">", "aft", "after", "po"), "AFT"),
 ]
+_BETWEEN = re.compile(r"(?:между|bet|between|mezi)\s+(.+?)\s+(?:и|and|a)\s+(.+)")
+
+
+def _words(lang: str) -> dict:
+    return DATE_WORDS.get((lang or "ru")[:2].lower(), DATE_WORDS["ru"])
 
 
 def _date_core(text: str) -> str | None:
@@ -38,9 +73,12 @@ def _date_core(text: str) -> str | None:
     m = re.fullmatch(r"(\d{3,4})/(\d{1,4})", text)       # двойной год: «1850/51»
     if m and int(m[1][:-len(m[2])] + m[2]) == int(m[1]) + 1:
         return f"{m[1]}/{m[2][-2:].zfill(2)}"
-    m = re.fullmatch(r"(?:(\d{1,2})\s+)?([A-Za-z]{3})\s+(\d{3,4})", text)
-    if m and m[2].upper() in MONTHS:
-        return " ".join(x for x in (m[1], m[2].upper(), m[3]) if x)
+    # месяц словом: «10 AUG 1962», «10 августа 1962», «10. srpna 1962», «August 1962», «srpen 1962»
+    m = re.fullmatch(r"(?:(\d{1,2})\.?\s+)?([^\W\d_]+)\.?\s+(\d{3,4})", text)
+    if m and m[2].lower() in MONTH_WORDS:
+        day, month = m[1], MONTH_CODES[MONTH_WORDS[m[2].lower()]]
+        if day is None or 1 <= int(day) <= 31:
+            return " ".join(x for x in (day and str(int(day)), month, m[3]) if x)
     return None
 
 
@@ -49,13 +87,14 @@ def normalize_date(text: str) -> str:
 
     «10.08.1962», «1962», «около 1850», «до 1790», «после 1900»,
     «1850–1860», «1850-52», «между 1850 и 1860», двойной год «1850/51»,
-    а также формат GEDCOM.
+    месяц словом («10 августа 1962»), а также формат GEDCOM.
+    Слова понимаются на всех трёх языках сразу: «about 1850», «před 1790», «mezi 1850 a 1860».
     """
     raw = " ".join(text.split())
     if not raw:
         return ""
     low = raw.lower()
-    m = re.fullmatch(r"(?:между|bet)\s+(.+?)\s+(?:и|and)\s+(.+)", low) or \
+    m = _BETWEEN.fullmatch(low) or \
         re.fullmatch(r"(\d{3,4})\s*[-–—]\s*(\d{1,4})", low)
     if m:
         second = m[2]
@@ -73,8 +112,9 @@ def normalize_date(text: str) -> str:
     return _date_core(raw) or raw
 
 
-def to_user_date(raw: str) -> str:
-    """Обратно к привычному вводу: «10 AUG 1962» → «10.08.1962», «ABT 1850» → «около 1850»."""
+def to_user_date(raw: str, lang: str = "ru") -> str:
+    """Обратно к привычному вводу: «10 AUG 1962» → «10.08.1962», «ABT 1850» → «около 1850» / «about 1850»."""
+    words = _words(lang)
     def core(text: str) -> str:
         parts = text.split()
         if len(parts) == 3 and parts[1] in MONTHS:
@@ -82,15 +122,19 @@ def to_user_date(raw: str) -> str:
         if len(parts) == 2 and parts[0] in MONTHS:
             return f"{MONTHS[parts[0]]:02d}.{parts[1]}"
         return text
+    return _with_words(raw, core, words, fallback=lambda: core(raw.upper().strip()) if _date_core(raw) else raw)
+
+
+def _with_words(raw: str, core, words: dict, fallback) -> str:
+    """Общая часть показа и формы: «между … и …», «около …», «до …», «после …»."""
     up = raw.upper().strip()
     m = re.fullmatch(r"BET (.+) AND (.+)", up)
     if m:
-        return f"между {core(m[1])} и {core(m[2])}"
-    for code, word in (("ABT ", "около "), ("EST ", "около "), ("CAL ", "около "),
-                       ("BEF ", "до "), ("AFT ", "после ")):
-        if up.startswith(code):
-            return word + core(up[len(code):])
-    return core(up) if _date_core(raw) else raw
+        return words["BET"].format(a=core(m[1]), b=core(m[2]))
+    for code in ("ABT", "EST", "CAL", "BEF", "AFT"):
+        if up.startswith(code + " "):
+            return f"{words['ABT' if code in ('EST', 'CAL') else code]} {core(up[len(code) + 1:])}"
+    return fallback()
 
 
 @dataclass
@@ -133,24 +177,27 @@ class FuzzyDate:
         dual = re.search(r"\b(\d{3,4}/\d{2})\b", self.raw)
         return f"{self.qualifier}{dual[1] if dual else self.year}"
 
-    def display_ru(self) -> str:
-        """«10 AUG 1962» → «10 августа 1962», «ABT 1850» → «около 1850»."""
+    def display(self, lang: str = "ru") -> str:
+        """Дата словами на языке интерфейса.
+
+        «10 AUG 1962» → «10 августа 1962» / «10 August 1962» / «10. srpna 1962»,
+        «ABT 1850» → «около 1850» / «about 1850» / «kolem 1850». Нераспознанное — как есть.
+        """
+        words = _words(lang)
+
         def core(text: str) -> str:
             parts = text.split()
             if len(parts) == 3 and parts[1] in MONTHS:
-                return f"{int(parts[0])} {RU_MONTHS[MONTHS[parts[1]] - 1]} {parts[2]}"
+                month = words["of"].split()[MONTHS[parts[1]] - 1]
+                return words["day"].format(d=int(parts[0]), m=month, y=parts[2])
             if len(parts) == 2 and parts[0] in MONTHS:
-                return f"{RU_MONTHS_NOM[MONTHS[parts[0]] - 1]} {parts[1]}"
+                return f"{words['month'].split()[MONTHS[parts[0]] - 1]} {parts[1]}"
             return text
-        raw = self.raw.upper()
-        m = re.fullmatch(r"BET (.+) AND (.+)", raw)
-        if m:
-            return f"между {core(m[1])} и {core(m[2])}"
-        for code, word in (("ABT ", "около "), ("EST ", "около "), ("CAL ", "около "),
-                           ("BEF ", "до "), ("AFT ", "после ")):
-            if raw.startswith(code):
-                return word + core(raw[len(code):])
-        return core(raw) if _date_core(self.raw) else self.raw
+        return _with_words(self.raw, core, words,
+                           fallback=lambda: core(self.raw.upper()) if _date_core(self.raw) else self.raw)
+
+    def display_ru(self) -> str:
+        return self.display("ru")
 
     @property
     def sort_int(self) -> int:

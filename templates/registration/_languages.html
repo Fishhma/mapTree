@@ -1,0 +1,7 @@
+{% load i18n %}{# Переключатель языка до входа (после входа язык — в «Аккаунте»). #}
+{% get_current_language as current %}
+<nav class="languages" aria-label="{% translate 'Язык интерфейса' %}">
+  {% for code, name in LANGUAGE_NAMES %}
+    {% if code == current %}<strong lang="{{ code }}">{{ name }}</strong>{% else %}<a href="{% url 'set-language' code %}?next={{ request.get_full_path|urlencode }}" lang="{{ code }}" hreflang="{{ code }}">{{ name }}</a>{% endif %}{% if not forloop.last %}<span aria-hidden="true"> · </span>{% endif %}
+  {% endfor %}
+</nav>

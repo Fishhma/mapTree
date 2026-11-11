@@ -1,0 +1,619 @@
+# Переводы mapTree: cs, домен django.
+# Новые строки дописывает «python manage.py translations»; переводить — в msgstr.
+msgid ""
+msgstr ""
+"Project-Id-Version: mapTree\n"
+"Language: cs\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
+
+#: genealogy/accounts.py:39
+msgid "удалить древо"
+msgstr "smazat rodokmen"
+
+#: genealogy/accounts.py:60
+#: genealogy/accounts.py:105
+#: templates/registration/_languages.html:3
+msgid "Язык интерфейса"
+msgstr "Jazyk rozhraní"
+
+#: genealogy/accounts.py:65
+#: templates/genealogy/account.html:33
+#: templates/registration/login.html:11
+msgid "Логин"
+msgstr "Přihlašovací jméno"
+
+#: genealogy/accounts.py:97
+msgid "Ваш пароль"
+msgstr "Vaše heslo"
+
+#: genealogy/accounts.py:115
+msgid "Новый логин"
+msgstr "Nové přihlašovací jméno"
+
+#: genealogy/accounts.py:140
+msgid "Подтверждение"
+msgstr "Potvrzení"
+
+#: genealogy/accounts.py:146
+msgid "Впишите «%(phrase)s»"
+msgstr "Napište „%(phrase)s“"
+
+#: genealogy/accounts.py:191
+msgid "Язык интерфейса изменён."
+msgstr "Jazyk rozhraní byl změněn."
+
+#: genealogy/accounts.py:201
+msgid "Пароль изменён."
+msgstr "Heslo bylo změněno."
+
+#: genealogy/accounts.py:127
+msgid "Это и есть ваш нынешний логин."
+msgstr "Toto už je vaše přihlašovací jméno."
+
+#: genealogy/accounts.py:133
+#: genealogy/accounts.py:151
+msgid "Неверный пароль."
+msgstr "Nesprávné heslo."
+
+#: genealogy/accounts.py:195
+msgid "Логин изменён. Теперь вы входите как «%(username)s»."
+msgstr "Přihlašovací jméno bylo změněno. Nyní se přihlašujete jako „%(username)s“."
+
+#: genealogy/accounts.py:159
+msgid "Нужно вписать «%(phrase)s»."
+msgstr "Je třeba napsat „%(phrase)s“."
+
+#: genealogy/apps.py:8
+msgid "Генеалогия"
+msgstr "Genealogie"
+
+#: genealogy/editing.py:63
+msgid "Неизвестный вид родства."
+msgstr "Neznámý druh příbuzenství."
+
+#: genealogy/editing.py:66
+msgid "У человека уже указаны оба родителя."
+msgstr "Tato osoba už má zadané oba rodiče."
+
+#: genealogy/editing.py:71
+msgid "Этот союз не относится к выбранному человеку."
+msgstr "Tento svazek nepatří k vybrané osobě."
+
+#: genealogy/editing.py:73
+msgid "У этой семьи уже указаны оба родителя."
+msgstr "Tato rodina už má oba rodiče."
+
+#: genealogy/forms.py:12
+msgid "10.08.1962 · около 1850 · до 1790 · после 1900 · 1850-52 · 1850/51"
+msgstr "10.08.1962 · kolem 1850 · před 1790 · po 1900 · 1850-52 · 1850/51"
+
+#: genealogy/importer.py:13
+msgid "Кремация"
+msgstr "Kremace"
+
+#: genealogy/importer.py:14
+msgid "Иммиграция"
+msgstr "Imigrace"
+
+#: genealogy/importer.py:14
+msgid "Помолвка"
+msgstr "Zasnoubení"
+
+#: genealogy/importer.py:48
+msgid "В древе уже есть люди."
+msgstr "V rodokmenu už jsou osoby."
+
+#: genealogy/importer.py:51
+msgid "Человек %(gid)s не найден в файле."
+msgstr "Osoba %(gid)s v souboru nebyla nalezena."
+
+#: genealogy/models.py:57
+msgid "язык"
+msgstr "jazyk"
+
+#: genealogy/models.py:60
+msgid "настройки пользователя"
+msgstr "nastavení uživatele"
+
+#: genealogy/models.py:61
+msgid "настройки пользователей"
+msgstr "nastavení uživatelů"
+
+#: genealogy/models.py:56
+msgid "пользователь"
+msgstr "uživatel"
+
+#: genealogy/models.py:106
+#: templates/genealogy/_start.html:31
+msgid "Мужской"
+msgstr "Muž"
+
+#: genealogy/models.py:107
+#: templates/genealogy/_start.html:32
+msgid "Женский"
+msgstr "Žena"
+
+#: genealogy/models.py:108
+msgid "Неизвестен"
+msgstr "Neznámé"
+
+#: genealogy/models.py:210
+msgid "Рождение"
+msgstr "Narození"
+
+#: genealogy/models.py:211
+msgid "Крещение"
+msgstr "Křest"
+
+#: genealogy/models.py:212
+msgid "Смерть"
+msgstr "Úmrtí"
+
+#: genealogy/models.py:213
+msgid "Погребение"
+msgstr "Pohřeb"
+
+#: genealogy/models.py:214
+msgid "Брак"
+msgstr "Sňatek"
+
+#: genealogy/models.py:215
+msgid "Развод"
+msgstr "Rozvod"
+
+#: genealogy/models.py:216
+msgid "Место жительства"
+msgstr "Bydliště"
+
+#: genealogy/models.py:217
+msgid "Образование"
+msgstr "Vzdělání"
+
+#: genealogy/models.py:218
+msgid "Военная служба"
+msgstr "Vojenská služba"
+
+#: genealogy/models.py:219
+msgid "Эмиграция"
+msgstr "Emigrace"
+
+#: genealogy/models.py:220
+msgid "Профессия"
+msgstr "Povolání"
+
+#: genealogy/models.py:221
+msgid "Вероисповедание"
+msgstr "Vyznání"
+
+#: genealogy/models.py:222
+msgid "Национальность"
+msgstr "Národnost"
+
+#: genealogy/models.py:223
+#: genealogy/models.py:317
+msgid "Другое"
+msgstr "Jiné"
+
+#: genealogy/models.py:273
+msgid "В браке"
+msgstr "Jméno po sňatku"
+
+#: genealogy/models.py:274
+msgid "Смена фамилии"
+msgstr "Změna příjmení"
+
+#: genealogy/models.py:275
+msgid "Также известен как"
+msgstr "Také známý jako"
+
+#: genealogy/models.py:276
+msgid "Другое написание / транслитерация"
+msgstr "Jiný zápis / přepis"
+
+#: genealogy/models.py:277
+msgid "Имя при крещении"
+msgstr "Křestní jméno při křtu"
+
+#: genealogy/models.py:306
+msgid "Источник"
+msgstr "Pramen"
+
+#: genealogy/models.py:307
+msgid "Воспоминание"
+msgstr "Vzpomínka"
+
+#: genealogy/models.py:310
+msgid "Запись о рождении"
+msgstr "Záznam o narození"
+
+#: genealogy/models.py:311
+msgid "Запись о крещении"
+msgstr "Záznam o křtu"
+
+#: genealogy/models.py:312
+msgid "Запись о браке"
+msgstr "Záznam o sňatku"
+
+#: genealogy/models.py:313
+msgid "Запись о смерти"
+msgstr "Záznam o úmrtí"
+
+#: genealogy/models.py:314
+msgid "Перепись"
+msgstr "Sčítání lidu"
+
+#: genealogy/models.py:315
+msgid "Фотография"
+msgstr "Fotografie"
+
+#: genealogy/models.py:316
+msgid "Письмо / личный документ"
+msgstr "Dopis / osobní doklad"
+
+#: genealogy/onboarding.py:68
+msgid "Выберите файл GEDCOM (.ged)."
+msgstr "Vyberte soubor GEDCOM (.ged)."
+
+#: genealogy/onboarding.py:70
+msgid "Файл слишком большой (больше 30 МБ)."
+msgstr "Soubor je příliš velký (přes 30 MB)."
+
+#: genealogy/onboarding.py:79
+msgid "Это не похоже на GEDCOM: в начале файла нет заголовка «0 HEAD»."
+msgstr "Nevypadá to jako GEDCOM: na začátku souboru chybí hlavička „0 HEAD“."
+
+#: genealogy/onboarding.py:82
+msgid "В файле не нашлось ни одного человека."
+msgstr "V souboru nebyla nalezena žádná osoba."
+
+#: genealogy/onboarding.py:36
+msgid "В древе уже есть люди. Импорт возможен только в пустое древо."
+msgstr "V rodokmenu už jsou osoby. Import je možný jen do prázdného rodokmenu."
+
+#: genealogy/onboarding.py:77
+msgid "Файл не в кодировке UTF-8: некоторые буквы могут отображаться неверно."
+msgstr "Soubor není v kódování UTF-8: některá písmena se mohou zobrazit chybně."
+
+#: genealogy/views.py:52
+msgid "Древо пустое"
+msgstr "Rodokmen je prázdný"
+
+#: genealogy/views.py:138
+#: genealogy/views.py:136
+msgid "Неверный запрос."
+msgstr "Neplatný požadavek."
+
+#: templates/genealogy/_account_fields.html:8
+#: templates/registration/register.html:14
+msgid "Не короче 8 символов, не только цифры и не слишком простой."
+msgstr "Alespoň 8 znaků, ne jen číslice a ne příliš jednoduché."
+
+#: templates/genealogy/_avatar.html:2
+#: templates/genealogy/_avatar.html:2
+#: templates/genealogy/account.html:3
+#: templates/genealogy/account.html:14
+msgid "Аккаунт"
+msgstr "Účet"
+
+#: templates/genealogy/_start.html:6
+msgid "С чего начнём?"
+msgstr "Jak začneme?"
+
+#: templates/genealogy/_start.html:7
+msgid "Ваше древо пока пустое."
+msgstr "Váš rodokmen je zatím prázdný."
+
+#: templates/genealogy/_start.html:10
+msgid "Загрузить GEDCOM"
+msgstr "Nahrát GEDCOM"
+
+#: templates/genealogy/_start.html:15
+msgid "Начать с нуля"
+msgstr "Začít od nuly"
+
+#: templates/genealogy/_start.html:16
+msgid "Сначала — ваша карточка. Она станет P0001, от неё считаются поколения."
+msgstr "Nejdřív vaše karta. Stane se P0001 a od ní se počítají generace."
+
+#: templates/genealogy/_start.html:22
+msgid "Ваша карточка"
+msgstr "Vaše karta"
+
+#: templates/genealogy/_start.html:23
+msgid "Можно заполнить не всё — дополните потом на странице человека."
+msgstr "Nemusíte vyplnit vše — doplníte později na stránce osoby."
+
+#: templates/genealogy/_start.html:25
+msgid "Имя"
+msgstr "Jméno"
+
+#: templates/genealogy/_start.html:26
+msgid "Отчество"
+msgstr "Otčestvo"
+
+#: templates/genealogy/_start.html:27
+msgid "Фамилия при рождении"
+msgstr "Rodné příjmení"
+
+#: templates/genealogy/_start.html:28
+msgid "Пол"
+msgstr "Pohlaví"
+
+#: templates/genealogy/_start.html:35
+msgid "Дата рождения"
+msgstr "Datum narození"
+
+#: templates/genealogy/_start.html:36
+msgid "Место рождения"
+msgstr "Místo narození"
+
+#: templates/genealogy/_start.html:38
+msgid "Даты можно писать так:"
+msgstr "Data lze psát takto:"
+
+#: templates/genealogy/_start.html:41
+#: templates/genealogy/_start.html:52
+msgid "Назад"
+msgstr "Zpět"
+
+#: templates/genealogy/_start.html:42
+msgid "Создать древо"
+msgstr "Vytvořit rodokmen"
+
+#: templates/genealogy/_start.html:47
+msgid "Загрузка GEDCOM"
+msgstr "Nahrání GEDCOM"
+
+#: templates/genealogy/_start.html:48
+msgid "Выберите файл .ged. Сначала покажем, кто в нём есть, — ничего ещё не сохранится."
+msgstr "Vyberte soubor .ged. Nejdřív ukážeme, kdo v něm je — zatím se nic neuloží."
+
+#: templates/genealogy/_start.html:53
+msgid "Прочитать файл"
+msgstr "Načíst soubor"
+
+#: templates/genealogy/_start.html:58
+msgid "Кто из них вы?"
+msgstr "Kdo z nich jste vy?"
+
+#: templates/genealogy/_start.html:61
+msgid "Найти по имени"
+msgstr "Hledat podle jména"
+
+#: templates/genealogy/_start.html:62
+msgid "Найти себя по имени"
+msgstr "Najděte se podle jména"
+
+#: templates/genealogy/_start.html:64
+msgid "Вы станете P0001 — от вас считаются поколения."
+msgstr "Stanete se P0001 — od vás se počítají generace."
+
+#: templates/genealogy/_start.html:67
+msgid "Другой файл"
+msgstr "Jiný soubor"
+
+#: templates/genealogy/_start.html:68
+msgid "Загрузить древо"
+msgstr "Nahrát rodokmen"
+
+#: templates/genealogy/_start.html:11
+msgid "Файл из другой программы: RootsMagic, MyHeritage, FamilySearch, Gramps… Загрузить его можно только сейчас, в пустое древо."
+msgstr "Soubor z jiného programu: RootsMagic, MyHeritage, FamilySearch, Gramps… Nahrát ho lze jen teď, do prázdného rodokmenu."
+
+#: templates/genealogy/account.html:3
+#: templates/genealogy/tree.html:19
+#: templates/registration/account_deleted.html:3
+#: templates/registration/base.html:6
+#: templates/registration/base.html:14
+msgid "Древо"
+msgstr "Rodokmen"
+
+#: templates/genealogy/account.html:7
+#: templates/registration/invite_invalid.html:8
+msgid "К древу"
+msgstr "Zpět na rodokmen"
+
+#: templates/genealogy/account.html:10
+msgid "Выйти из аккаунта"
+msgstr "Odhlásit se"
+
+#: templates/genealogy/account.html:22
+msgid "Язык"
+msgstr "Jazyk"
+
+#: templates/genealogy/account.html:28
+msgid "Сохранить"
+msgstr "Uložit"
+
+#: templates/genealogy/account.html:39
+msgid "Сменить логин"
+msgstr "Změnit přihlašovací jméno"
+
+#: templates/genealogy/account.html:44
+#: templates/registration/login.html:13
+msgid "Пароль"
+msgstr "Heslo"
+
+#: templates/genealogy/account.html:50
+msgid "Сменить пароль"
+msgstr "Změnit heslo"
+
+#: templates/genealogy/account.html:55
+msgid "Удаление древа и учётной записи"
+msgstr "Smazání rodokmenu a účtu"
+
+#: templates/genealogy/account.html:58
+msgid "Удалить древо и начать заново"
+msgstr "Smazat rodokmen a začít znovu"
+
+#: templates/genealogy/account.html:69
+msgid "Удалить древо"
+msgstr "Smazat rodokmen"
+
+#: templates/genealogy/account.html:72
+msgid "Древо и так пустое."
+msgstr "Rodokmen je už prázdný."
+
+#: templates/genealogy/account.html:77
+#: templates/genealogy/account.html:86
+msgid "Удалить учётную запись"
+msgstr "Smazat účet"
+
+#: templates/genealogy/account.html:16
+msgid "Вы вошли как <strong>%(username)s</strong>."
+msgstr "Přihlášeni jako <strong>%(username)s</strong>."
+
+#: templates/genealogy/account.html:17
+msgid "В древе %(n)s человек."
+msgid_plural "В древе %(n)s человек."
+msgstr[0] "V rodokmenu je %(n)s osoba."
+msgstr[1] "V rodokmenu jsou %(n)s osoby."
+msgstr[2] "V rodokmenu je %(n)s osob."
+
+#: templates/genealogy/account.html:18
+msgid "Материалов: %(materials)s."
+msgstr "Materiálů: %(materials)s."
+
+#: templates/genealogy/account.html:61
+msgid "Удалятся все люди, семьи, места и материалы (с файлами). Учётная запись останется, и откроется окно первого входа — можно будет загрузить GEDCOM или начать с нуля. <strong>Вернуть удалённое нельзя.</strong> Перед этим можно сохранить <a href=\"%(svg_url)s\">древо в SVG</a>."
+msgstr "Smažou se všechny osoby, rodiny, místa a materiály (i se soubory). Účet zůstane a otevře se úvodní okno — budete moci nahrát GEDCOM nebo začít od nuly. <strong>Smazaná data nelze obnovit.</strong> Předtím si můžete uložit <a href=\"%(svg_url)s\">rodokmen jako SVG</a>."
+
+#: templates/genealogy/account.html:79
+msgid "Удалятся учётная запись и всё древо: люди, семьи, места и материалы (с файлами). Войти снова будет нельзя, для новой регистрации понадобится новое приглашение. <strong>Вернуть удалённое нельзя.</strong>"
+msgstr "Smaže se účet i celý rodokmen: osoby, rodiny, místa a materiály (i se soubory). Znovu se už nepřihlásíte, nová registrace bude potřebovat novou pozvánku. <strong>Smazaná data nelze obnovit.</strong>"
+
+#: templates/genealogy/account.html:89
+msgid "Вы — единственный администратор сайта, поэтому свою учётную запись удалить нельзя: иначе в админку никто не войдёт. Древо можно очистить выше."
+msgstr "Jste jediný správce webu, proto svůj účet smazat nemůžete — jinak by se do administrace nikdo nepřihlásil. Rodokmen můžete vyprázdnit výše."
+
+#: templates/genealogy/tree.html:6
+#: templates/genealogy/tree.html:13
+msgid "Генеалогическое древо"
+msgstr "Rodokmen"
+
+#: templates/genealogy/tree.html:21
+msgid "Найти человека"
+msgstr "Najít osobu"
+
+#: templates/genealogy/tree.html:22
+msgid "Найти человека по имени или номеру"
+msgstr "Najít osobu podle jména nebo čísla"
+
+#: templates/genealogy/tree.html:28
+msgid "Управление видом"
+msgstr "Ovládání zobrazení"
+
+#: templates/genealogy/tree.html:29
+msgid "Отдалить"
+msgstr "Oddálit"
+
+#: templates/genealogy/tree.html:30
+msgid "Приблизить"
+msgstr "Přiblížit"
+
+#: templates/genealogy/tree.html:31
+msgid "Показать всё древо"
+msgstr "Zobrazit celý rodokmen"
+
+#: templates/genealogy/tree.html:31
+msgid "Всё древо"
+msgstr "Celý rodokmen"
+
+#: templates/genealogy/tree.html:32
+#: templates/genealogy/tree.html:32
+msgid "Ко мне"
+msgstr "Ke mně"
+
+#: templates/genealogy/tree.html:33
+msgid "Всё древо одним файлом для печати"
+msgstr "Celý rodokmen jako jeden soubor pro tisk"
+
+#: templates/genealogy/tree.html:33
+msgid "SVG для печати"
+msgstr "SVG pro tisk"
+
+#: templates/genealogy/tree.html:43
+msgid "Закрыть карточку"
+msgstr "Zavřít kartu"
+
+#: templates/registration/account_deleted.html:3
+#: templates/registration/account_deleted.html:5
+msgid "Учётная запись удалена"
+msgstr "Účet byl smazán"
+
+#: templates/registration/account_deleted.html:6
+msgid "Ваше древо и все материалы удалены."
+msgstr "Váš rodokmen i všechny materiály byly smazány."
+
+#: templates/registration/account_deleted.html:7
+msgid "На страницу входа"
+msgstr "Na přihlášení"
+
+#: templates/registration/invite_invalid.html:3
+msgid "Приглашение"
+msgstr "Pozvánka"
+
+#: templates/registration/invite_invalid.html:6
+msgid "Вы уже вошли"
+msgstr "Už jste přihlášeni"
+
+#: templates/registration/invite_invalid.html:7
+msgid "Это приглашение для нового человека. Чтобы зарегистрироваться по нему, сначала выйдите."
+msgstr "Tato pozvánka je pro nového uživatele. Chcete-li se podle ní zaregistrovat, nejprve se odhlaste."
+
+#: templates/registration/invite_invalid.html:10
+msgid "Приглашение недействительно"
+msgstr "Neplatná pozvánka"
+
+#: templates/registration/invite_invalid.html:12
+msgid "По этой ссылке уже зарегистрировались. Если это были вы — просто войдите."
+msgstr "Podle tohoto odkazu se už někdo zaregistroval. Pokud jste to byli vy, stačí se přihlásit."
+
+#: templates/registration/invite_invalid.html:14
+msgid "Срок действия ссылки истёк. Попросите прислать новое приглашение."
+msgstr "Platnost odkazu vypršela. Požádejte o novou pozvánku."
+
+#: templates/registration/invite_invalid.html:16
+msgid "Такой ссылки нет. Проверьте, что она скопирована целиком."
+msgstr "Takový odkaz neexistuje. Zkontrolujte, že je zkopírovaný celý."
+
+#: templates/registration/invite_invalid.html:18
+msgid "Перейти ко входу"
+msgstr "Přejít na přihlášení"
+
+#: templates/registration/login.html:3
+#: templates/registration/login.html:5
+msgid "Вход"
+msgstr "Přihlášení"
+
+#: templates/registration/login.html:9
+msgid "Неверный логин или пароль."
+msgstr "Nesprávné přihlašovací jméno nebo heslo."
+
+#: templates/registration/login.html:16
+msgid "Войти"
+msgstr "Přihlásit se"
+
+#: templates/registration/login.html:18
+msgid "Регистрация — только по приглашению."
+msgstr "Registrace je možná jen na pozvánku."
+
+#: templates/registration/register.html:3
+#: templates/registration/register.html:5
+msgid "Регистрация"
+msgstr "Registrace"
+
+#: templates/registration/register.html:6
+msgid "Вас пригласили. После регистрации у вас будет своё древо — его видите только вы."
+msgstr "Byli jste pozváni. Po registraci budete mít vlastní rodokmen — uvidíte ho jen vy."
+
+#: templates/registration/register.html:16
+msgid "Потом его можно сменить в настройках аккаунта."
+msgstr "Později ho můžete změnit v nastavení účtu."
+
+#: templates/registration/register.html:20
+msgid "Зарегистрироваться"
+msgstr "Zaregistrovat se"

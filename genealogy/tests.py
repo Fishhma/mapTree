@@ -555,9 +555,9 @@ class InvitationTest(TestCase):
         self.invitation = Invitation.objects.create(note="Для мамы")
         self.url = f"/invite/{self.invitation.code}/"
 
-    def register(self, client=None, username="mama"):
+    def register(self, client=None, username="mama", language="ru"):
         return (client or self.client).post(self.url, {"username": username, "password1": "Velka-rodina-1890",
-                                                       "password2": "Velka-rodina-1890"})
+                                                       "password2": "Velka-rodina-1890", "language": language})
 
     def test_registration_creates_user_with_own_empty_tree(self):
         page = self.client.get(self.url)
@@ -755,7 +755,7 @@ class AccountTest(SmallTreeMixin, TestCase):
         ids = __import__("re").findall(r'id="([^"]+)"', r.content.decode())
         self.assertEqual(len(ids), len(set(ids)), ids)                        # id не повторяются
         self.assertContains(r, "Вы вошли как <strong>owner</strong>")
-        self.assertContains(r, "В древе 7 чел.")
+        self.assertContains(r, "В древе 7 человек.")
         self.assertContains(r, 'action="/logout/"')
         for page in ("/", f"/people/{self.marian.code}/"):
             html = self.client.get(page)
@@ -868,3 +868,140 @@ class StaticVersionTest(SmallTreeMixin, TestCase):
         Path(path).write_text("a { color: blue; }")
         os.utime(path, (1, 1))                      # время изменения точно другое
         self.assertNotEqual(file_version(path), first)
+
+
+class LanguageTest(SmallTreeMixin, TestCase):
+    """Язык интерфейса: русский, английский, чешский."""
+
+    def test_before_login_language_follows_browser(self):
+        self.client.logout()
+        cases = {"cs-CZ,cs;q=0.9": "Přihlášení", "en-US,en;q=0.8": "Sign in", "ru-RU": "Вход",
+                 "de-DE,de;q=0.9": "Sign in"}                  # незнакомый язык браузера — английский
+        for header, text in cases.items():
+            r = Client(headers={"Accept-Language": header}).get("/login/")
+            self.assertContains(r, f"<h1>{text}</h1>", msg_prefix=header)
+        r = Client().get("/login/")                           # без заголовка — русский
+        self.assertContains(r, "<h1>Вход</h1>")
+
+    def test_switcher_before_login(self):
+        self.client.logout()
+        client = Client(headers={"Accept-Language": "ru"})
+        r = client.get("/lang/cs/?next=/login/")
+        self.assertRedirects(r, "/login/", fetch_redirect_response=False)
+        self.assertContains(client.get("/login/"), "<h1>Přihlášení</h1>")
+        self.assertContains(client.get("/login/"), 'href="/lang/en/?next=/login/"')
+        self.assertContains(client.get("/login/"), 'hreflang="en">English</a>')   # названия — на самих себе
+        r = client.get("/lang/en/?next=https://example.com/")      # чужой адрес — на вход
+        self.assertRedirects(r, "/login/", fetch_redirect_response=False)
+        client.get("/lang/xx/?next=/login/")                       # неизвестный язык — без изменений
+        self.assertContains(client.get("/login/"), "<h1>Sign in</h1>")
+
+    def test_registration_language_choice(self):
+        self.client.logout()
+        invitation = Invitation.objects.create()
+        url = f"/invite/{invitation.code}/"
+        page = Client(headers={"Accept-Language": "cs"}).get(url)
+        self.assertContains(page, '<option value="cs" selected>')       # по браузеру
+        self.assertContains(page, "Registrace")
+        r = self.client.post(url, {"language": "en", "username": "jana", "password1": "Velka-rodina-1890",
+                                   "password2": "Velka-rodina-1890"})
+        self.assertRedirects(r, "/", fetch_redirect_response=False)
+        self.assertEqual(User.objects.get(username="jana").profile.language, "en")
+        self.assertContains(self.client.get("/account/"), "<h1>Account</h1>")
+        self.assertEqual(self.client.cookies["django_language"].value, "en")
+
+    def test_change_language_in_account(self):
+        self.make_tree()
+        self.assertContains(self.client.get("/account/"), "<h1>Аккаунт</h1>")   # по умолчанию — русский
+        r = self.client.post("/account/", {"action": "language", "language": "cs"})
+        self.assertRedirects(r, "/account/#language", fetch_redirect_response=False)
+        page = self.client.get("/account/")
+        self.assertContains(page, "<h1>Účet</h1>")
+        self.assertContains(page, "Jazyk rozhraní byl změněn.")
+        self.assertContains(page, 'lang="cs"')
+        self.assertContains(page, "V rodokmenu je 7 osob.")                    # мн. число по-чешски
+        self.assertEqual(self.client.cookies["django_language"].value, "cs")
+        # фраза подтверждения — на языке интерфейса
+        r = self.client.post("/account/", {"action": "clear", "password": "Древо-пароль-1",
+                                           "confirm": "smazat rodokmen"})
+        self.assertRedirects(r, "/", fetch_redirect_response=False)
+
+    def test_russian_plural(self):
+        from django.utils import translation
+        from django.utils.translation import ngettext
+        with translation.override("ru"):
+            forms = [ngettext("В древе %(n)s человек.", "В древе %(n)s человек.", n) % {"n": n} for n in (1, 3, 5)]
+        self.assertEqual(forms, ["В древе 1 человек.", "В древе 3 человека.", "В древе 5 человек."])
+
+    def test_every_string_is_translated(self):
+        """Строки для перевода из кода — все с переводом в en и cs (и мн. число в ru).
+
+        Упал — запустите «python manage.py translations» и впишите переводы в locale/*/LC_MESSAGES/*.po.
+        """
+        from .i18n import LANGS, extract, needs_translation, po_path, read_po
+        problems = []
+        for domain, messages in extract().items():
+            for lang in LANGS:
+                _header, done = read_po(po_path(lang, domain))
+                for key, msg in messages.items():
+                    if not needs_translation(lang, msg):
+                        continue
+                    have = done.get(key)
+                    if have is None or not have.msgstr or not all(have.msgstr):
+                        problems.append(f"{lang}/{domain}: {msg.msgid!r} ({msg.refs[0]})")
+        self.assertEqual(problems, [], "\n" + "\n".join(problems[:30]))
+
+    def test_mo_compiler_matches_gettext(self):
+        import gettext
+        import tempfile
+        from .i18n import compile_mo
+        po = Path(tempfile.mkdtemp()) / "cs" / "LC_MESSAGES" / "django.po"
+        po.parent.mkdir(parents=True)
+        self.addCleanup(__import__("shutil").rmtree, po.parent.parent.parent, ignore_errors=True)
+        po.write_text('''msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\\n"
+
+msgid "Дом"
+msgstr "Dům"
+
+msgid "Строка с \\"кавычками\\""
+msgstr "Řádek s \\"uvozovkami\\""
+
+msgid "%(n)s дом"
+msgid_plural "%(n)s домов"
+msgstr[0] "%(n)s dům"
+msgstr[1] "%(n)s domy"
+msgstr[2] "%(n)s domů"
+
+msgid "Без перевода"
+msgstr ""
+''', encoding="utf-8")
+        import io
+        catalog = gettext.GNUTranslations(io.BytesIO(compile_mo(po)))
+        self.assertEqual(catalog.gettext("Дом"), "Dům")
+        self.assertEqual(catalog.gettext('Строка с "кавычками"'), 'Řádek s "uvozovkami"')
+        self.assertEqual([catalog.ngettext("%(n)s дом", "%(n)s домов", n) for n in (1, 3, 7)],
+                         ["%(n)s dům", "%(n)s domy", "%(n)s domů"])
+        self.assertEqual(catalog.gettext("Без перевода"), "Без перевода")
+
+    def test_main_page_and_js_catalog_follow_user_language(self):
+        self.make_tree()
+        UserProfile = __import__("genealogy.models", fromlist=["UserProfile"]).UserProfile
+        UserProfile.objects.update_or_create(user=self.user, defaults={"language": "cs"})
+        page = self.client.get("/")
+        self.assertContains(page, '<html lang="cs">')
+        self.assertContains(page, "Celý rodokmen")                         # «Всё древо»
+        self.assertContains(page, '<script src="/jsi18n/?l=cs">')
+        catalog = self.client.get("/jsi18n/?l=cs").content.decode()
+        self.assertIn("Sourozenci", catalog)                               # «Братья и сёстры» из tree.js
+        self.assertIn("generac", catalog)                                  # мн. число
+        self.assertIn("no-cache", self.client.get("/jsi18n/")["Cache-Control"])
+        panel = self.client.get(f"/api/people/{self.marian.pk}/").json()
+        self.assertEqual(panel["sex_label"], "Muž")
+        self.assertEqual(panel["key"][0]["label"], "Narození")
+        self.assertEqual(panel["key"][0]["date"], "6. ledna 2007")                # месяц словом — по-чешски
+        self.assertIn("kolem 1850", catalog)                                      # подсказка формата дат в «+»
+        self.client.post("/account/", {"action": "language", "language": "en"})
+        self.assertContains(self.client.get("/"), "Whole tree")

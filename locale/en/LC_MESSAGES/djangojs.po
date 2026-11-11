@@ -1,0 +1,289 @@
+# Переводы mapTree: en, домен djangojs.
+# Новые строки дописывает «python manage.py translations»; переводить — в msgstr.
+msgid ""
+msgstr ""
+"Project-Id-Version: mapTree\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: static/genealogy/start.js:32
+msgid "Сервер ответил ошибкой."
+msgstr "The server returned an error."
+
+#: static/genealogy/start.js:33
+msgid "Не получилось."
+msgstr "That didn't work."
+
+#: static/genealogy/start.js:36
+msgid "Нет связи с сервером."
+msgstr "No connection to the server."
+
+#: static/genealogy/start.js:78
+msgid "Выберите файл GEDCOM (.ged)."
+msgstr "Choose a GEDCOM file (.ged)."
+
+#: static/genealogy/start.js:94
+msgid "В файле %(n)s человек"
+msgid_plural "В файле %(n)s человек"
+msgstr[0] "The file has %(n)s person"
+msgstr[1] "The file has %(n)s people"
+
+#: static/genealogy/start.js:95
+msgid "и %(n)s семья."
+msgid_plural "и %(n)s семей."
+msgstr[0] "and %(n)s family."
+msgstr[1] "and %(n)s families."
+
+#: static/genealogy/start.js:96
+msgid "Выберите себя."
+msgstr "Choose yourself."
+
+#: static/genealogy/start.js:102
+msgid "…и ещё %(n)s"
+msgstr "…and %(n)s more"
+
+#: static/genealogy/start.js:131
+msgid "Выберите себя в списке."
+msgstr "Choose yourself in the list."
+
+#: static/genealogy/start.js:139
+msgid "Загружаем…"
+msgstr "Importing…"
+
+#: static/genealogy/tree.js:103
+msgid "Добавить родственника: %(name)s"
+msgstr "Add a relative: %(name)s"
+
+#: static/genealogy/tree.js:110
+msgid "%(n)s человек"
+msgid_plural "%(n)s человек"
+msgstr[0] "%(n)s person"
+msgstr[1] "%(n)s people"
+
+#: static/genealogy/tree.js:111
+msgid "%(n)s поколение"
+msgid_plural "%(n)s поколений"
+msgstr[0] "%(n)s generation"
+msgstr[1] "%(n)s generations"
+
+#: static/genealogy/tree.js:124
+msgid "Поколение %(n)s"
+msgstr "Generation %(n)s"
+
+#: static/genealogy/tree.js:241
+msgid "Загрузка…"
+msgstr "Loading…"
+
+#: static/genealogy/tree.js:248
+msgid "Не удалось загрузить карточку. Обновите страницу."
+msgstr "Could not load the card. Reload the page."
+
+#: static/genealogy/tree.js:295
+msgid "Изменить"
+msgstr "Edit"
+
+#: static/genealogy/tree.js:296
+msgid "Ключевые сведения"
+msgstr "Key facts"
+
+#: static/genealogy/tree.js:300
+msgid "Семья"
+msgstr "Family"
+
+#: static/genealogy/tree.js:301
+msgid "Родители"
+msgstr "Parents"
+
+#: static/genealogy/tree.js:302
+msgid "Не указаны"
+msgstr "Not set"
+
+#: static/genealogy/tree.js:303
+msgid "Браки и дети"
+msgstr "Marriages and children"
+
+#: static/genealogy/tree.js:303
+msgid "Супруг(а) и дети"
+msgstr "Spouse and children"
+
+#: static/genealogy/tree.js:305
+msgid "Партнёр неизвестен"
+msgstr "Partner unknown"
+
+#: static/genealogy/tree.js:308
+msgid "Нет"
+msgstr "None"
+
+#: static/genealogy/tree.js:309
+msgid "Братья и сёстры"
+msgstr "Siblings"
+
+#: static/genealogy/tree.js:310
+msgid "События"
+msgstr "Events"
+
+#: static/genealogy/tree.js:310
+#: static/genealogy/tree.js:311
+#: static/genealogy/tree.js:315
+#: static/genealogy/tree.js:322
+msgid "Пока нет"
+msgstr "None yet"
+
+#: static/genealogy/tree.js:311
+msgid "Факты"
+msgstr "Facts"
+
+#: static/genealogy/tree.js:312
+msgid "Варианты имени"
+msgstr "Name variants"
+
+#: static/genealogy/tree.js:316
+msgid "Источники (%(n)s)"
+msgstr "Sources (%(n)s)"
+
+#: static/genealogy/tree.js:323
+msgid "Жизнеописание"
+msgstr "Biography"
+
+#: static/genealogy/tree.js:330
+msgid "Добавить ребёнка"
+msgstr "Add a child"
+
+#: static/genealogy/tree.js:330
+msgid "Новый ребёнок"
+msgstr "New child"
+
+#: static/genealogy/tree.js:331
+msgid "Добавить супруга(у)"
+msgstr "Add a spouse"
+
+#: static/genealogy/tree.js:331
+msgid "Новый супруг(а)"
+msgstr "New spouse"
+
+#: static/genealogy/tree.js:332
+msgid "Добавить родителя"
+msgstr "Add a parent"
+
+#: static/genealogy/tree.js:332
+msgid "Новый родитель"
+msgstr "New parent"
+
+#: static/genealogy/tree.js:333
+msgid "Добавить родного брата или сестру"
+msgstr "Add a brother or sister"
+
+#: static/genealogy/tree.js:333
+msgid "Новый брат или сестра"
+msgstr "New brother or sister"
+
+#: static/genealogy/tree.js:335
+msgid "Второй родитель неизвестен"
+msgstr "Other parent unknown"
+
+#: static/genealogy/tree.js:401
+msgid "%(names)s и ещё %(n)s"
+msgstr "%(names)s and %(n)s more"
+
+#: static/genealogy/tree.js:403
+msgid "Второй родитель детей: %(names)s"
+msgstr "Other parent of: %(names)s"
+
+#: static/genealogy/tree.js:405
+msgid "Новый брак (без общих детей)"
+msgstr "New marriage (no children together)"
+
+#: static/genealogy/tree.js:416
+msgid "Сохранить"
+msgstr "Save"
+
+#: static/genealogy/tree.js:420
+msgid "Второй родитель"
+msgstr "Other parent"
+
+#: static/genealogy/tree.js:427
+msgid "Кем приходится новый супруг(а)"
+msgstr "Who is the new spouse"
+
+#: static/genealogy/tree.js:434
+msgid "Имя"
+msgstr "Given name"
+
+#: static/genealogy/tree.js:435
+msgid "Отчество"
+msgstr "Patronymic"
+
+#: static/genealogy/tree.js:436
+msgid "Фамилия при рождении"
+msgstr "Surname at birth"
+
+#: static/genealogy/tree.js:437
+msgid "Пол"
+msgstr "Sex"
+
+#: static/genealogy/tree.js:438
+msgid "Неизвестен"
+msgstr "Unknown"
+
+#: static/genealogy/tree.js:438
+msgid "Мужской"
+msgstr "Male"
+
+#: static/genealogy/tree.js:439
+msgid "Женский"
+msgstr "Female"
+
+#: static/genealogy/tree.js:440
+msgid "Дата рождения"
+msgstr "Date of birth"
+
+#: static/genealogy/tree.js:441
+msgid "10.08.1962 · около 1850 · 1850/51"
+msgstr "10.08.1962 · about 1850 · 1850/51"
+
+#: static/genealogy/tree.js:442
+msgid "Место рождения"
+msgstr "Place of birth"
+
+#: static/genealogy/tree.js:443
+msgid "Жив(а)"
+msgstr "Living"
+
+#: static/genealogy/tree.js:445
+msgid "Все поля необязательны."
+msgstr "All fields are optional."
+
+#: static/genealogy/tree.js:448
+msgid "Отмена"
+msgstr "Cancel"
+
+#: static/genealogy/tree.js:455
+msgid "Выберите, кем приходится новый супруг(а)."
+msgstr "Choose who the new spouse is."
+
+#: static/genealogy/tree.js:468
+msgid "Не удалось сохранить."
+msgstr "Could not save."
+
+#: static/genealogy/tree.js:472
+msgid "Сервер не отвечает."
+msgstr "The server is not responding."
+
+#: static/genealogy/tree.js:481
+msgid "для: %(name)s"
+msgstr "for: %(name)s"
+
+#: static/genealogy/tree.js:516
+msgid "Никого не найдено"
+msgstr "Nobody found"
+
+#: static/genealogy/tree.js:553
+msgid "Не удалось загрузить древо. Проверьте, что сервер запущен."
+msgstr "Could not load the tree. Check that the server is running."
+
+#: static/genealogy/tree.js:557
+msgid "Древо пока пустое."
+msgstr "The tree is still empty."

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from django.http import JsonResponse
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from tree_engine.gedcom import parse
@@ -32,7 +33,7 @@ def needs_start(tree: FamilyTree) -> bool:
 
 def _refuse_if_started(tree: FamilyTree):
     if not needs_start(tree):
-        return JsonResponse({"error": "В древе уже есть люди. Импорт возможен только в пустое древо."},
+        return JsonResponse({"error": _("В древе уже есть люди. Импорт возможен только в пустое древо.")},
                             status=409)
     return None
 
@@ -64,21 +65,21 @@ def start_self(request):
 def read_gedcom(upload) -> tuple[object, list[str]]:
     """Файл из формы → разобранное древо и предупреждения. Ошибки — понятным текстом (EditError)."""
     if upload is None:
-        raise EditError("Выберите файл GEDCOM (.ged).")
+        raise EditError(_("Выберите файл GEDCOM (.ged)."))
     if upload.size > MAX_GEDCOM_BYTES:
-        raise EditError("Файл слишком большой (больше 30 МБ).")
+        raise EditError(_("Файл слишком большой (больше 30 МБ)."))
     raw = upload.read()
     notes = []
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         text = raw.decode("utf-8", errors="replace")
-        notes.append("Файл не в кодировке UTF-8: некоторые буквы могут отображаться неверно.")
+        notes.append(_("Файл не в кодировке UTF-8: некоторые буквы могут отображаться неверно."))
     if "0 HEAD" not in text[:2000]:
-        raise EditError("Это не похоже на GEDCOM: в начале файла нет заголовка «0 HEAD».")
+        raise EditError(_("Это не похоже на GEDCOM: в начале файла нет заголовка «0 HEAD»."))
     tree = parse(text)
     if not tree.people:
-        raise EditError("В файле не нашлось ни одного человека.")
+        raise EditError(_("В файле не нашлось ни одного человека."))
     return tree, notes + tree.validate()
 
 

@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 db.sqlite3
 media/
+
+# Скомпилированные переводы: собираются из .po при запуске (genealogy/i18n.py)
+*.mo

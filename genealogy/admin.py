@@ -4,6 +4,7 @@ from django.contrib import admin, messages
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
+from django.utils.translation import get_language
 
 from tree_engine.model import to_user_date
 
@@ -16,7 +17,7 @@ class FriendlyDateForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if "date" in self.fields and self.instance.pk and self.instance.date:
-            self.initial["date"] = to_user_date(self.instance.date)
+            self.initial["date"] = to_user_date(self.instance.date, get_language())
 
 
 class PersonEventInline(admin.TabularInline):

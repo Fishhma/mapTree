@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 from django.db import transaction
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_noop
 
 from tree_engine.model import Tree
 
 from .models import Event, Family, FamilyTree, Person, Place, Source
 
-KIND_MAP = {"BAPM": "CHR", "CREM": ("EVEN", "Кремация"), "IMMI": ("EVEN", "Иммиграция"),
-            "ENGA": ("EVEN", "Помолвка")}
+# Названия «Другого» события записываются в базу на языке того, кто импортирует.
+KIND_MAP = {"BAPM": "CHR", "CREM": ("EVEN", gettext_noop("Кремация")),
+            "IMMI": ("EVEN", gettext_noop("Иммиграция")), "ENGA": ("EVEN", gettext_noop("Помолвка"))}
 
 
 class GedcomImportError(ValueError):
@@ -18,7 +21,7 @@ class GedcomImportError(ValueError):
 def _kind(tag: str) -> tuple[str, str]:
     mapped = KIND_MAP.get(tag, tag)
     if isinstance(mapped, tuple):
-        return mapped
+        return mapped[0], _(mapped[1])
     return (mapped, "") if mapped in Event.Kind.values else ("EVEN", tag)
 
 
@@ -42,10 +45,10 @@ def import_tree(family_tree: FamilyTree, tree: Tree, root_gid: str | None = None
     """
     if Person.objects.filter(tree=family_tree).exists():
         if not replace:
-            raise GedcomImportError("В древе уже есть люди.")
+            raise GedcomImportError(_("В древе уже есть люди."))
         clear_tree(family_tree)
     if root_gid and root_gid not in tree.people:
-        raise GedcomImportError(f"Человек {root_gid} не найден в файле.")
+        raise GedcomImportError(_("Человек %(gid)s не найден в файле.") % {"gid": root_gid})
 
     places: dict[str, Place] = {}
 

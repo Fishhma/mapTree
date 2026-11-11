@@ -21,10 +21,12 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",                # язык до входа: cookie или браузер
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.auth.middleware.LoginRequiredMiddleware",   # всё — только после входа
+    "genealogy.middleware.UserLanguageMiddleware",              # после входа — язык из «Аккаунта»
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -36,6 +38,8 @@ TEMPLATES = [{
     "APP_DIRS": True,
     "OPTIONS": {"context_processors": [
         "django.template.context_processors.request",
+        "django.template.context_processors.i18n",
+        "genealogy.context_processors.languages",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
     ]},
@@ -55,7 +59,13 @@ AUTH_PASSWORD_VALIDATORS = [
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Интерфейс: русский (исходный язык строк в коде), английский, чешский — см. genealogy/i18n.py.
+# LANGUAGE_CODE должен быть "ru": строки без перевода показываются как есть (по-русски).
+# Браузерам с другим языком (немецкий, словацкий…) до входа достаётся FALLBACK_LANGUAGE.
 LANGUAGE_CODE = "ru"
+FALLBACK_LANGUAGE = "en"
+LANGUAGES = [("ru", "Русский"), ("en", "English"), ("cs", "Čeština")]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = "Europe/Prague"
 USE_I18N = True
 USE_TZ = True

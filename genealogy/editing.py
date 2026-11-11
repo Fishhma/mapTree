@@ -9,6 +9,7 @@ from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.utils.translation import gettext as _
 
 from .models import Citation, Event, Family, Person, Place, Source, SourceFile
 
@@ -59,17 +60,17 @@ def add_relative(person: Person, relation: str, data: dict, family_id=None) -> P
     sibling — в семью родителей (если родители неизвестны — семья без партнёров).
     """
     if relation not in RELATIONS:
-        raise EditError("Неизвестный вид родства.")
+        raise EditError(_("Неизвестный вид родства."))
     parents = person.parent_family
     if relation == "parent" and parents and parents.partner1_id and parents.partner2_id:
-        raise EditError("У человека уже указаны оба родителя.")
+        raise EditError(_("У человека уже указаны оба родителя."))
     family = None
     if relation in ("child", "spouse") and family_id:
         family = person.families.filter(pk=family_id).first()
         if family is None:
-            raise EditError("Этот союз не относится к выбранному человеку.")
+            raise EditError(_("Этот союз не относится к выбранному человеку."))
         if relation == "spouse" and family.partner1_id and family.partner2_id:
-            raise EditError("У этой семьи уже указаны оба родителя.")
+            raise EditError(_("У этой семьи уже указаны оба родителя."))
 
     tree = person.tree
     new = create_person(tree, data)

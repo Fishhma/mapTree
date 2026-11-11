@@ -29,11 +29,11 @@ async function send(form, body) {
     const response = await fetch(form.action, {
       method: "POST", body, headers: { "X-CSRFToken": csrfToken() },
     });
-    const data = await response.json().catch(() => ({ error: "Сервер ответил ошибкой." }));
-    if (!response.ok || data.error) throw new Error(data.error || "Не получилось.");
+    const data = await response.json().catch(() => ({ error: gettext("Сервер ответил ошибкой.") }));
+    if (!response.ok || data.error) throw new Error(data.error || gettext("Не получилось."));
     return data;
   } catch (exc) {
-    setError(form, exc.message === "Failed to fetch" ? "Нет связи с сервером." : exc.message);
+    setError(form, exc.message === "Failed to fetch" ? gettext("Нет связи с сервером.") : exc.message);
     return null;
   } finally {
     button.disabled = false;
@@ -75,7 +75,7 @@ fileForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const file = fileForm.elements.file.files[0];
   if (!file) {
-    setError(fileForm, "Выберите файл GEDCOM (.ged).");
+    setError(fileForm, gettext("Выберите файл GEDCOM (.ged)."));
     return;
   }
   const body = new FormData();
@@ -90,14 +90,16 @@ fileForm.addEventListener("submit", async (event) => {
 
 function fillPeople(data) {
   const n = data.people.length;
-  whoForm.querySelector("[data-summary]").textContent =
-    `В файле ${n} ${plural(n, "человек", "человека", "человек")} и ${data.families} ` +
-    `${plural(data.families, "семья", "семьи", "семей")}. Выберите себя.`;
+  whoForm.querySelector("[data-summary]").textContent = [
+    interpolate(ngettext("В файле %(n)s человек", "В файле %(n)s человек", n), { n }, true),
+    interpolate(ngettext("и %(n)s семья.", "и %(n)s семей.", data.families), { n: data.families }, true),
+    gettext("Выберите себя."),
+  ].join(" ");
   const notes = whoForm.querySelector("[data-notes]");
   notes.replaceChildren(...data.notes.map((text) => Object.assign(document.createElement("li"), { textContent: text })));
   if (data.notes_total > data.notes.length) {
     notes.append(Object.assign(document.createElement("li"),
-      { textContent: `…и ещё ${data.notes_total - data.notes.length}` }));
+      { textContent: interpolate(gettext("…и ещё %(n)s"), { n: data.notes_total - data.notes.length }, true) }));
   }
   notes.hidden = !data.notes.length;
   list.replaceChildren(...data.people.map((p) => {
@@ -114,13 +116,6 @@ function fillPeople(data) {
   importButton.disabled = true;
 }
 
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
-
 search.addEventListener("input", () => {
   const q = fold(search.value.trim());
   list.querySelectorAll("li").forEach((li) => { li.hidden = q !== "" && !li.dataset.search.includes(q); });
@@ -133,17 +128,18 @@ whoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const chosen = whoForm.querySelector("input[name=root]:checked");
   if (!chosen || !gedcomFile) {
-    setError(whoForm, "Выберите себя в списке.");
+    setError(whoForm, gettext("Выберите себя в списке."));
     return;
   }
   const body = new FormData();
   body.append("file", gedcomFile);
   body.append("action", "import");
   body.append("root", chosen.value);
-  importButton.textContent = "Загружаем…";
+  const label = importButton.textContent;
+  importButton.textContent = gettext("Загружаем…");
   const data = await send(whoForm, body);
   if (data) finish(data);
-  else importButton.textContent = "Загрузить древо";
+  else importButton.textContent = label;
 });
 
 show("choose");

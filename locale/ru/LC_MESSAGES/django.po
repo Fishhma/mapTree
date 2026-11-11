@@ -1,0 +1,17 @@
+# Переводы mapTree: ru, домен django.
+# Новые строки дописывает «python manage.py translations»; переводить — в msgstr.
+msgid ""
+msgstr ""
+"Project-Id-Version: mapTree\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+#: templates/genealogy/account.html:17
+msgid "В древе %(n)s человек."
+msgid_plural "В древе %(n)s человек."
+msgstr[0] "В древе %(n)s человек."
+msgstr[1] "В древе %(n)s человека."
+msgstr[2] "В древе %(n)s человек."

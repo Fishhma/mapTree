@@ -55,3 +55,11 @@ a { color: var(--ink); }
 .danger .auth-card { border-top-color: var(--danger); }
 .danger .auth-card button { background: var(--danger); }
 .danger .auth-card button:hover { background: #7f1f31; }
+
+/* переключатель языка до входа */
+.languages { margin: 16px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+.languages a { color: var(--muted); }
+.languages a:hover { color: var(--ink); }
+.languages strong { color: var(--ink); }
+.auth-card select { font: inherit; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 4px;
+                    background: #fff; color: var(--ink); }

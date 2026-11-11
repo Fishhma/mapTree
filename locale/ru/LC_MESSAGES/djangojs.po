@@ -1,0 +1,38 @@
+# Переводы mapTree: ru, домен djangojs.
+# Новые строки дописывает «python manage.py translations»; переводить — в msgstr.
+msgid ""
+msgstr ""
+"Project-Id-Version: mapTree\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+
+#: static/genealogy/start.js:94
+msgid "В файле %(n)s человек"
+msgid_plural "В файле %(n)s человек"
+msgstr[0] "В файле %(n)s человек"
+msgstr[1] "В файле %(n)s человека"
+msgstr[2] "В файле %(n)s человек"
+
+#: static/genealogy/start.js:95
+msgid "и %(n)s семья."
+msgid_plural "и %(n)s семей."
+msgstr[0] "и %(n)s семья."
+msgstr[1] "и %(n)s семьи."
+msgstr[2] "и %(n)s семей."
+
+#: static/genealogy/tree.js:110
+msgid "%(n)s человек"
+msgid_plural "%(n)s человек"
+msgstr[0] "%(n)s человек"
+msgstr[1] "%(n)s человека"
+msgstr[2] "%(n)s человек"
+
+#: static/genealogy/tree.js:111
+msgid "%(n)s поколение"
+msgid_plural "%(n)s поколений"
+msgstr[0] "%(n)s поколение"
+msgstr[1] "%(n)s поколения"
+msgstr[2] "%(n)s поколений"

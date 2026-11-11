@@ -100,13 +100,16 @@ function draw() {
     }
     // «+» в правом верхнем углу: добавить родственника. На печать (tree.svg) не попадает.
     const plus = el("g", { class: "card-plus", tabindex: "0", role: "button",
-      "aria-label": `Добавить родственника: ${fullName(p)}`, "aria-haspopup": "menu" }, g);
+      "aria-label": interpolate(gettext("Добавить родственника: %(name)s"), { name: fullName(p) }, true), "aria-haspopup": "menu" }, g);
     const cx = left + W, cy = b.y;
     el("circle", { cx, cy, r: 9 }, plus);
     el("path", { d: `M ${cx - 4} ${cy} H ${cx + 4} M ${cx} ${cy - 4} V ${cy + 4}` }, plus);
     cards.set(b.id, g);
   }
-  $("stats").textContent = `${data.boxes.length} чел. · ${data.rows.length} поколений`;
+  $("stats").textContent = [
+    interpolate(ngettext("%(n)s человек", "%(n)s человек", data.boxes.length), { n: data.boxes.length }, true),
+    interpolate(ngettext("%(n)s поколение", "%(n)s поколений", data.rows.length), { n: data.rows.length }, true),
+  ].join(" · ");
 }
 
 // ---------- вид: перемещение и масштаб ----------
@@ -118,7 +121,7 @@ function apply() {
   for (const r of data.rows) {
     const y = view.y + (r.y + H / 2) * view.k;
     if (y < 50 || y > innerHeight - 10) continue;
-    ruler.append(h("span", { style: `top:${y}px`, title: `Поколение ${r.gen}` }, String(r.gen)));
+    ruler.append(h("span", { style: `top:${y}px`, title: interpolate(gettext("Поколение %(n)s"), { n: r.gen }, true) }, String(r.gen)));
   }
 }
 
@@ -235,14 +238,14 @@ async function select(id, { center = true } = {}) {
   history.replaceState(null, "", "#" + data.people[id].code);
   openPanel();
   if (center) centerOn(id);
-  panelBody.replaceChildren(h("p", { class: "p-empty" }, "Загрузка…"));
+  panelBody.replaceChildren(h("p", { class: "p-empty" }, gettext("Загрузка…")));
   try {
     const res = await fetch(`/api/people/${id}/`);
     if (!res.ok) throw new Error(res.status);
     const person = await res.json();
     if (selected === id) renderPanel(person);
   } catch {
-    panelBody.replaceChildren(h("p", { class: "p-empty" }, "Не удалось загрузить карточку. Обновите страницу."));
+    panelBody.replaceChildren(h("p", { class: "p-empty" }, gettext("Не удалось загрузить карточку. Обновите страницу.")));
   }
 }
 
@@ -289,47 +292,47 @@ function renderPanel(p) {
           p.surname ? h("span", {}, " ", p.surname) : null),
         h("p", { class: "p-meta" }, [p.code, p.years, p.sex_label].filter(Boolean).join(" · ")))),
     // Правка и удаление — только на отдельной странице человека (защита от случайных изменений).
-    h("div", { class: "p-actions" }, h("a", { href: p.details_url }, "Изменить")),
-    section("Ключевые сведения", h("dl", { class: "facts" }, p.key.flatMap((e) => [
+    h("div", { class: "p-actions" }, h("a", { href: p.details_url }, gettext("Изменить"))),
+    section(gettext("Ключевые сведения"), h("dl", { class: "facts" }, p.key.flatMap((e) => [
       h("dt", {}, e.label),
       h("dd", {}, e.date || (e.place ? "" : "—"), e.place ? h("span", { class: "place" }, e.place) : null),
     ]))),
-    section("Семья",
-      h("h4", {}, "Родители"),
-      p.parents.length ? h("ul", { class: "people" }, p.parents.map(personRow)) : h("p", { class: "p-empty" }, "Не указаны"),
-      h("h4", {}, p.families.length > 1 ? "Браки и дети" : "Супруг(а) и дети"),
+    section(gettext("Семья"),
+      h("h4", {}, gettext("Родители")),
+      p.parents.length ? h("ul", { class: "people" }, p.parents.map(personRow)) : h("p", { class: "p-empty" }, gettext("Не указаны")),
+      h("h4", {}, p.families.length > 1 ? gettext("Браки и дети") : gettext("Супруг(а) и дети")),
       p.families.length ? p.families.map((f) => h("div", { class: "union-block" },
-        h("ul", { class: "people" }, f.spouse ? personRow(f.spouse) : h("li", { class: "p-empty" }, "Партнёр неизвестен")),
+        h("ul", { class: "people" }, f.spouse ? personRow(f.spouse) : h("li", { class: "p-empty" }, gettext("Партнёр неизвестен"))),
         f.events.length ? eventList(f.events, "") : null,
         f.children.length ? h("ul", { class: "people kids" }, f.children.map(personRow)) : null))
-        : h("p", { class: "p-empty" }, "Нет"),
-      p.siblings.length ? [h("h4", {}, "Братья и сёстры"), h("ul", { class: "people" }, p.siblings.map(personRow))] : null),
-    section("События", eventList(p.events, "Пока нет")),
-    section("Факты", eventList(p.facts, "Пока нет")),
-    section("Варианты имени", p.names.length
+        : h("p", { class: "p-empty" }, gettext("Нет")),
+      p.siblings.length ? [h("h4", {}, gettext("Братья и сёстры")), h("ul", { class: "people" }, p.siblings.map(personRow))] : null),
+    section(gettext("События"), eventList(p.events, gettext("Пока нет"))),
+    section(gettext("Факты"), eventList(p.facts, gettext("Пока нет"))),
+    section(gettext("Варианты имени"), p.names.length
       ? h("ul", { class: "people" }, p.names.map((n) => h("li", {}, `${n.name} — ${n.kind.toLowerCase()}`,
         n.date ? `, ${n.date}` : "", n.note ? ` (${n.note})` : "")))
-      : h("p", { class: "p-empty" }, "Пока нет")),
-    section(`Источники (${p.sources.length})`, p.sources.length ? p.sources.map((s) => h("div", { class: "source" },
+      : h("p", { class: "p-empty" }, gettext("Пока нет"))),
+    section(interpolate(gettext("Источники (%(n)s)"), { n: p.sources.length }, true), p.sources.length ? p.sources.map((s) => h("div", { class: "source" },
       h("strong", {}, h("a", { href: s.admin_url }, s.title)),
       h("span", { class: "meta" }, [s.kind, s.date, s.event, s.detail].filter(Boolean).join(" · ")),
       s.repository ? h("div", { class: "meta" }, s.repository, s.reference ? `, ${s.reference}` : "") : null,
       s.files.length ? h("div", { class: "thumbs" }, s.files.map((f) => h("a", { href: f.url, target: "_blank", title: f.caption },
         f.is_image ? h("img", { src: f.url, alt: f.caption, loading: "lazy" }) : f.caption))) : null))
-      : h("p", { class: "p-empty" }, "Пока нет")),
-    p.notes ? section("Жизнеописание", h("p", { class: "notes" }, p.notes)) : null,
+      : h("p", { class: "p-empty" }, gettext("Пока нет"))),
+    p.notes ? section(gettext("Жизнеописание"), h("p", { class: "notes" }, p.notes)) : null,
   ];
   panelBody.replaceChildren(...nodes.flat().filter(Boolean));
 }
 
 // ---------- «+»: добавление родственника ----------
 const RELATIONS = {
-  child: { menu: "Добавить ребёнка", title: "Новый ребёнок" },
-  spouse: { menu: "Добавить супруга(у)", title: "Новый супруг(а)" },
-  parent: { menu: "Добавить родителя", title: "Новый родитель" },
-  sibling: { menu: "Добавить родного брата или сестру", title: "Новый брат или сестра" },
+  child: { menu: gettext("Добавить ребёнка"), title: gettext("Новый ребёнок") },
+  spouse: { menu: gettext("Добавить супруга(у)"), title: gettext("Новый супруг(а)") },
+  parent: { menu: gettext("Добавить родителя"), title: gettext("Новый родитель") },
+  sibling: { menu: gettext("Добавить родного брата или сестру"), title: gettext("Новый брат или сестра") },
 };
-const UNKNOWN_PARTNER = "Второй родитель неизвестен";
+const UNKNOWN_PARTNER = gettext("Второй родитель неизвестен");
 let menuAnchor = null;
 
 const parentsOf = (id) => {
@@ -394,10 +397,12 @@ function spouseChoices(id) {
     .filter((fid) => data.families[fid].partners.length === 1 && data.families[fid].children.length)
     .map((fid) => {
       const names = kids(fid);
-      const shown = names.length > 3 ? `${names.slice(0, 3).join(", ")} и ещё ${names.length - 3}` : names.join(", ");
-      return { value: fid, label: `Второй родитель детей: ${shown}` };
+      const shown = names.length > 3
+        ? interpolate(gettext("%(names)s и ещё %(n)s"), { names: names.slice(0, 3).join(", "), n: names.length - 3 }, true)
+        : names.join(", ");
+      return { value: fid, label: interpolate(gettext("Второй родитель детей: %(names)s"), { names: shown }, true) };
     });
-  if (choices.length) choices.push({ value: "", label: "Новый брак (без общих детей)" });
+  if (choices.length) choices.push({ value: "", label: gettext("Новый брак (без общих детей)") });
   return choices;
 }
 
@@ -408,46 +413,46 @@ function showAddForm(id, relation) {
   const person = data.people[id];
   const places = [...new Set(Object.values(data.people).map((p) => p.birth_place).filter(Boolean))].sort();
   const error = h("p", { class: "f-error", role: "alert", hidden: true });
-  const save = h("button", { type: "submit", class: "primary" }, "Сохранить");
+  const save = h("button", { type: "submit", class: "primary" }, gettext("Сохранить"));
 
   let unions = null;
   if (relation === "child") {
-    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, "Второй родитель"),
+    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, gettext("Второй родитель")),
       unionChoices(id).map((c, i) => h("label", {},
         h("input", { type: "radio", name: "family", value: c.value, checked: i === 0 }), " ", c.label)));
   }
   const spouseOptions = relation === "spouse" ? spouseChoices(id) : [];
   if (spouseOptions.length) {
     // Без выбора по умолчанию: ошибиться здесь — значит молча сделать человека не тем родителем.
-    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, "Кем приходится новый супруг(а)"),
+    unions = h("fieldset", { class: "f-unions" }, h("legend", {}, gettext("Кем приходится новый супруг(а)")),
       spouseOptions.map((c) => h("label", {},
         h("input", { type: "radio", name: "family", value: c.value }), " ", c.label)));
   }
 
   const form = h("form", { class: "add-form", novalidate: true },
     unions,
-    field("Имя", h("input", { name: "given_name", autocomplete: "off" })),
-    field("Отчество", h("input", { name: "patronymic", autocomplete: "off" })),
-    field("Фамилия при рождении", h("input", { name: "birth_surname", autocomplete: "off" })),
-    field("Пол", h("select", { name: "sex" },
-      h("option", { value: "U" }, "Неизвестен"), h("option", { value: "M" }, "Мужской"),
-      h("option", { value: "F" }, "Женский"))),
-    field("Дата рождения", h("input", { name: "birth_date", autocomplete: "off",
-      placeholder: "10.08.1962 · около 1850 · 1850/51" })),
-    field("Место рождения", h("input", { name: "birth_place", autocomplete: "off", list: "places" })),
-    h("label", { class: "f-check" }, h("input", { type: "checkbox", name: "is_living" }), " Жив(а)"),
+    field(gettext("Имя"), h("input", { name: "given_name", autocomplete: "off" })),
+    field(gettext("Отчество"), h("input", { name: "patronymic", autocomplete: "off" })),
+    field(gettext("Фамилия при рождении"), h("input", { name: "birth_surname", autocomplete: "off" })),
+    field(gettext("Пол"), h("select", { name: "sex" },
+      h("option", { value: "U" }, gettext("Неизвестен")), h("option", { value: "M" }, gettext("Мужской")),
+      h("option", { value: "F" }, gettext("Женский")))),
+    field(gettext("Дата рождения"), h("input", { name: "birth_date", autocomplete: "off",
+      placeholder: gettext("10.08.1962 · около 1850 · 1850/51") })),
+    field(gettext("Место рождения"), h("input", { name: "birth_place", autocomplete: "off", list: "places" })),
+    h("label", { class: "f-check" }, h("input", { type: "checkbox", name: "is_living" }), " ", gettext("Жив(а)")),
     h("datalist", { id: "places" }, places.map((pl) => h("option", { value: pl }))),
-    h("p", { class: "f-hint" }, "Все поля необязательны."),
+    h("p", { class: "f-hint" }, gettext("Все поля необязательны.")),
     error,
     h("div", { class: "p-actions" }, save,
-      h("button", { type: "button", onclick: () => select(id, { center: false }) }, "Отмена")));
+      h("button", { type: "button", onclick: () => select(id, { center: false }) }, gettext("Отмена"))));
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const body = Object.fromEntries(new FormData(form));
     body.relation = relation;
     if (spouseOptions.length && !("family" in body)) {
-      error.textContent = "Выберите, кем приходится новый супруг(а).";
+      error.textContent = gettext("Выберите, кем приходится новый супруг(а).");
       error.hidden = false;
       return;
     }
@@ -460,11 +465,11 @@ function showAddForm(id, relation) {
         body: JSON.stringify(body),
       });
       const answer = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(answer.error || "Не удалось сохранить.");
+      if (!res.ok) throw new Error(answer.error || gettext("Не удалось сохранить."));
       await loadTree();
       select(answer.id);
     } catch (err) {
-      error.textContent = err instanceof TypeError ? "Сервер не отвечает." : err.message;
+      error.textContent = err instanceof TypeError ? gettext("Сервер не отвечает.") : err.message;
       error.hidden = false;
       save.disabled = false;
     }
@@ -473,7 +478,7 @@ function showAddForm(id, relation) {
   panelBody.replaceChildren(
     h("div", { class: "p-head" }, h("span", { class: "p-sex" }),
       h("div", {}, h("h2", { class: "p-name" }, RELATIONS[relation].title),
-        h("p", { class: "p-meta" }, `для: ${fullName(person)}`))),
+        h("p", { class: "p-meta" }, interpolate(gettext("для: %(name)s"), { name: fullName(person) }, true)))),
     form);
   form.querySelector("input[name=given_name]").focus();
 }
@@ -508,7 +513,7 @@ function runSearch() {
     results.append(h("li", { onmousedown: (e) => { e.preventDefault(); pick(id); } },
       h("span", {}, fullName(p)), h("small", {}, [p.years, p.code].filter(Boolean).join(" · "))));
   }
-  if (!hits.length) results.append(h("li", {}, h("small", {}, "Никого не найдено")));
+  if (!hits.length) results.append(h("li", {}, h("small", {}, gettext("Никого не найдено"))));
   results.hidden = false;
 }
 function pick(id) {
@@ -545,11 +550,11 @@ async function init() {
   try {
     await loadTree();
   } catch {
-    showMessage("Не удалось загрузить древо. Проверьте, что сервер запущен.");
+    showMessage(gettext("Не удалось загрузить древо. Проверьте, что сервер запущен."));
     return;
   }
   if (!data.boxes.length) {
-    showMessage("Древо пока пустое.");
+    showMessage(gettext("Древо пока пустое."));
     return;
   }
   const fromHash = Object.entries(data.people).find(([, p]) => "#" + p.code === location.hash);

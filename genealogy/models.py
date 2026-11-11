@@ -14,6 +14,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import get_language
+from django.utils.translation import gettext_lazy as _
 
 from tree_engine.model import FuzzyDate, normalize_date
 
@@ -46,6 +48,25 @@ class FamilyTree(models.Model):
         FamilyTree.objects.filter(pk=self.pk).update(next_number=models.F("next_number") + 1)
         self.refresh_from_db(fields=["next_number"])
         return f"P{self.next_number - 1:04d}"
+
+
+class UserProfile(models.Model):
+    """Настройки пользователя. Пока — язык интерфейса (выбирается при регистрации, меняется в «Аккаунте»)."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile",
+                                verbose_name=_("пользователь"))
+    language = models.CharField(_("язык"), max_length=8, choices=settings.LANGUAGES, default="ru")
+
+    class Meta:
+        verbose_name = _("настройки пользователя")
+        verbose_name_plural = _("настройки пользователей")
+
+    def __str__(self):
+        return str(self.user)
+
+    @classmethod
+    def of(cls, user) -> "UserProfile":
+        profile, _created = cls.objects.get_or_create(user=user)
+        return profile
 
 
 def _invitation_code() -> str:
@@ -82,9 +103,9 @@ class Invitation(models.Model):
 
 class Person(models.Model):
     class Sex(models.TextChoices):
-        MALE = "M", "Мужской"
-        FEMALE = "F", "Женский"
-        UNKNOWN = "U", "Неизвестен"
+        MALE = "M", _("Мужской")
+        FEMALE = "F", _("Женский")
+        UNKNOWN = "U", _("Неизвестен")
 
     tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="people",
                              verbose_name="древо")
@@ -186,20 +207,20 @@ class Place(models.Model):
 class Event(models.Model):
     """Событие или факт человека либо семьи."""
     class Kind(models.TextChoices):
-        BIRTH = "BIRT", "Рождение"
-        CHRISTENING = "CHR", "Крещение"
-        DEATH = "DEAT", "Смерть"
-        BURIAL = "BURI", "Погребение"
-        MARRIAGE = "MARR", "Брак"
-        DIVORCE = "DIV", "Развод"
-        RESIDENCE = "RESI", "Место жительства"
-        EDUCATION = "EDUC", "Образование"
-        MILITARY = "MILI", "Военная служба"
-        EMIGRATION = "EMIG", "Эмиграция"
-        OCCUPATION = "OCCU", "Профессия"
-        RELIGION = "RELI", "Вероисповедание"
-        NATIONALITY = "NATI", "Национальность"
-        OTHER = "EVEN", "Другое"
+        BIRTH = "BIRT", _("Рождение")
+        CHRISTENING = "CHR", _("Крещение")
+        DEATH = "DEAT", _("Смерть")
+        BURIAL = "BURI", _("Погребение")
+        MARRIAGE = "MARR", _("Брак")
+        DIVORCE = "DIV", _("Развод")
+        RESIDENCE = "RESI", _("Место жительства")
+        EDUCATION = "EDUC", _("Образование")
+        MILITARY = "MILI", _("Военная служба")
+        EMIGRATION = "EMIG", _("Эмиграция")
+        OCCUPATION = "OCCU", _("Профессия")
+        RELIGION = "RELI", _("Вероисповедание")
+        NATIONALITY = "NATI", _("Национальность")
+        OTHER = "EVEN", _("Другое")
 
     KEY_KINDS = {"BIRT", "CHR", "DEAT", "BURI"}          # «ключевые сведения»
     FACT_KINDS = {"OCCU", "RELI", "NATI"}                # «факты» — без даты по смыслу
@@ -239,7 +260,7 @@ class Event(models.Model):
 
     @property
     def date_display(self) -> str:
-        return FuzzyDate(self.date).display_ru() if self.date else ""
+        return FuzzyDate(self.date).display(get_language()) if self.date else ""
 
     @property
     def label(self) -> str:
@@ -249,11 +270,11 @@ class Event(models.Model):
 class PersonName(models.Model):
     """Варианты имени: в браке, после развода, транслитерация, при крещении…"""
     class Kind(models.TextChoices):
-        MARRIED = "married", "В браке"
-        CHANGED = "changed", "Смена фамилии"
-        ALIAS = "alias", "Также известен как"
-        TRANSLIT = "translit", "Другое написание / транслитерация"
-        RELIGIOUS = "religious", "Имя при крещении"
+        MARRIED = "married", _("В браке")
+        CHANGED = "changed", _("Смена фамилии")
+        ALIAS = "alias", _("Также известен как")
+        TRANSLIT = "translit", _("Другое написание / транслитерация")
+        RELIGIOUS = "religious", _("Имя при крещении")
 
     person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="names")
     kind = models.CharField("тип", max_length=12, choices=Kind.choices, default=Kind.ALIAS)
@@ -282,18 +303,18 @@ class Source(models.Model):
     например, одна семейная фотография у каждого, кто на ней есть.
     """
     class Category(models.TextChoices):
-        SOURCE = "source", "Источник"
-        MEMORY = "memory", "Воспоминание"
+        SOURCE = "source", _("Источник")
+        MEMORY = "memory", _("Воспоминание")
 
     class Kind(models.TextChoices):
-        BIRTH = "birth", "Запись о рождении"
-        BAPTISM = "baptism", "Запись о крещении"
-        MARRIAGE = "marriage", "Запись о браке"
-        DEATH = "death", "Запись о смерти"
-        CENSUS = "census", "Перепись"
-        PHOTO = "photo", "Фотография"
-        LETTER = "letter", "Письмо / личный документ"
-        OTHER = "other", "Другое"
+        BIRTH = "birth", _("Запись о рождении")
+        BAPTISM = "baptism", _("Запись о крещении")
+        MARRIAGE = "marriage", _("Запись о браке")
+        DEATH = "death", _("Запись о смерти")
+        CENSUS = "census", _("Перепись")
+        PHOTO = "photo", _("Фотография")
+        LETTER = "letter", _("Письмо / личный документ")
+        OTHER = "other", _("Другое")
 
     tree = models.ForeignKey(FamilyTree, on_delete=models.CASCADE, related_name="sources",
                              verbose_name="древо")
@@ -322,7 +343,7 @@ class Source(models.Model):
 
     @property
     def date_display(self) -> str:
-        return FuzzyDate(self.date).display_ru() if self.date else ""
+        return FuzzyDate(self.date).display(get_language()) if self.date else ""
 
     @property
     def sort_key(self) -> int:

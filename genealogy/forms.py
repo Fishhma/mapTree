@@ -1,5 +1,6 @@
 """Формы страницы человека (/people/P0001/). Все поля необязательны."""
 from django import forms
+from django.utils.translation import get_language, gettext_lazy
 
 from tree_engine.model import to_user_date
 
@@ -7,7 +8,8 @@ from .editing import find_or_create_place
 from .models import Event, Person, PersonName
 
 KEY_KINDS = ("BIRT", "CHR", "DEAT", "BURI")
-DATE_HINT = "10.08.1962 · около 1850 · до 1790 · после 1900 · 1850-52 · 1850/51"
+# Подсказка под полями дат — на языке интерфейса (а понимаются слова всех трёх языков).
+DATE_HINT = gettext_lazy("10.08.1962 · около 1850 · до 1790 · после 1900 · 1850-52 · 1850/51")
 
 
 class PersonForm(forms.ModelForm):
@@ -35,7 +37,7 @@ class KeyEventsForm(forms.Form):
             event = self.events.get(kind)
             self.fields[f"{kind}_date"] = forms.CharField(
                 label="дата", required=False, max_length=60,
-                initial=to_user_date(event.date) if event and event.date else "",
+                initial=to_user_date(event.date, get_language()) if event and event.date else "",
                 widget=forms.TextInput(attrs={"autocomplete": "off"}))
             self.fields[f"{kind}_place"] = forms.CharField(
                 label="место", required=False, max_length=255,
@@ -68,7 +70,7 @@ class OtherEventForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["kind"].choices = [("", "— выберите —")] + [(k.value, k.label) for k in OTHER_KINDS]
         if self.instance.pk:
-            self.initial["date"] = to_user_date(self.instance.date) if self.instance.date else ""
+            self.initial["date"] = to_user_date(self.instance.date, get_language()) if self.instance.date else ""
             self.initial["place_name"] = self.instance.place.name if self.instance.place else ""
 
     def save(self, commit=True):
@@ -86,7 +88,7 @@ class NameForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk and self.instance.date:
-            self.initial["date"] = to_user_date(self.instance.date)
+            self.initial["date"] = to_user_date(self.instance.date, get_language())
 
 
 EventFormSet = forms.inlineformset_factory(Person, Event, form=OtherEventForm, fk_name="person",

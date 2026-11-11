@@ -352,3 +352,37 @@ class UserDateInputTest(unittest.TestCase):
         for text in ["10.08.1962", "08.1962", "1962", "около 1850", "до 1790", "между 1850 и 1860", "весна 1945",
                      "1850/51"]:
             self.assertEqual(to_user_date(normalize_date(text)), text)
+        for lang, texts in {"en": ["about 1850", "before 03.05.1790", "between 1850 and 1860", "after 1900"],
+                            "cs": ["kolem 1850", "před 03.05.1790", "mezi 1850 a 1860", "po 1900"]}.items():
+            for text in texts:
+                self.assertEqual(to_user_date(normalize_date(text), lang), text, (lang, text))
+
+    def test_display_in_three_languages(self):
+        cases = {
+            "10 AUG 1962": ("10 августа 1962", "10 August 1962", "10. srpna 1962"),
+            "AUG 1962": ("август 1962", "August 1962", "srpen 1962"),
+            "ABT 1850": ("около 1850", "about 1850", "kolem 1850"),
+            "EST 1850": ("около 1850", "about 1850", "kolem 1850"),
+            "BEF 3 MAY 1790": ("до 3 мая 1790", "before 3 May 1790", "před 3. května 1790"),
+            "AFT 1900": ("после 1900", "after 1900", "po 1900"),
+            "BET 1850 AND 1860": ("между 1850 и 1860", "between 1850 and 1860", "mezi 1850 a 1860"),
+            "1850/51": ("1850/51", "1850/51", "1850/51"),
+            "весна 1945": ("весна 1945", "весна 1945", "весна 1945"),        # своё — как есть
+        }
+        for raw, expected in cases.items():
+            self.assertEqual(tuple(FuzzyDate(raw).display(lang) for lang in ("ru", "en", "cs")), expected, raw)
+        self.assertEqual(FuzzyDate("10 AUG 1962").display("de"), "10 августа 1962")   # незнакомый язык
+
+    def test_input_words_in_any_language(self):
+        """Месяц словом и «около/до/после/между» понимаются на всех трёх языках, что бы ни стояло в интерфейсе."""
+        from tree_engine.model import normalize_date
+        cases = {"10 августа 1962": "10 AUG 1962", "10. srpna 1962": "10 AUG 1962", "10 August 1962": "10 AUG 1962",
+                 "10 Aug. 1962": "10 AUG 1962", "1 мая 1900": "1 MAY 1900", "май 1900": "MAY 1900",
+                 "srpen 1962": "AUG 1962", "červen 1900": "JUN 1900", "červenec 1900": "JUL 1900",
+                 "10. září 1962": "10 SEP 1962", "Sept 1900": "SEP 1900",
+                 "about 1850": "ABT 1850", "kolem 1850": "ABT 1850", "before 1790": "BEF 1790",
+                 "před 1790": "BEF 1790", "after 1900": "AFT 1900", "po 1900": "AFT 1900",
+                 "between 1850 and 1860": "BET 1850 AND 1860", "mezi 1850 a 1860": "BET 1850 AND 1860",
+                 "около 10 августа 1962": "ABT 10 AUG 1962", "32 августа 1962": "32 августа 1962"}
+        for given, expected in cases.items():
+            self.assertEqual(normalize_date(given), expected, given)

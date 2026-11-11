@@ -1,8 +1,9 @@
 {% extends "registration/base.html" %}
-{% block title %}Регистрация · Древо{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Регистрация" %} · {% translate "Древо" %}{% endblock %}
 {% block content %}
-<h1>Регистрация</h1>
-<p class="hint">Вас пригласили. После регистрации у вас будет своё древо — его видите только вы.</p>
+<h1>{% translate "Регистрация" %}</h1>
+<p class="hint">{% translate "Вас пригласили. После регистрации у вас будет своё древо — его видите только вы." %}</p>
 <form method="post" novalidate>
   {% csrf_token %}
   {% for field in form %}
@@ -10,10 +11,20 @@
     {{ field }}
     {% for error in field.errors %}<p class="error">{{ error }}</p>{% endfor %}
     {% if field.name == "password1" %}
-      <p class="hint small">Не короче 8 символов, не только цифры и не слишком простой.</p>
+      <p class="hint small">{% translate "Не короче 8 символов, не только цифры и не слишком простой." %}</p>
+    {% elif field.name == "language" %}
+      <p class="hint small">{% translate "Потом его можно сменить в настройках аккаунта." %}</p>
     {% endif %}
   {% endfor %}
   {% for error in form.non_field_errors %}<p class="error">{{ error }}</p>{% endfor %}
-  <button type="submit">Зарегистрироваться</button>
+  <button type="submit">{% translate "Зарегистрироваться" %}</button>
 </form>
+{# Выбор языка сразу переводит страницу (поле — первое, ничего ещё не введено). #}
+{% url 'set-language' 'LANG' as language_url %}
+<script>
+  document.getElementById("{{ form.language.id_for_label }}").addEventListener("change", (event) => {
+    location.href = "{{ language_url }}".replace("LANG", event.target.value) +
+      "?next=" + encodeURIComponent(location.pathname);
+  });
+</script>
 {% endblock %}

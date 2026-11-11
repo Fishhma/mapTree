@@ -1,18 +1,19 @@
 {% extends "registration/base.html" %}
-{% block title %}Вход · Древо{% endblock %}
+{% load i18n %}
+{% block title %}{% translate "Вход" %} · {% translate "Древо" %}{% endblock %}
 {% block content %}
-<h1>Вход</h1>
+<h1>{% translate "Вход" %}</h1>
 <form method="post" action="{% url 'login' %}" novalidate>
   {% csrf_token %}
   {% if form.non_field_errors %}
-    <p class="error" role="alert">Неверный логин или пароль.</p>
+    <p class="error" role="alert">{% translate "Неверный логин или пароль." %}</p>
   {% endif %}
-  <label for="{{ form.username.id_for_label }}">Логин</label>
+  <label for="{{ form.username.id_for_label }}">{% translate "Логин" %}</label>
   {{ form.username }}
-  <label for="{{ form.password.id_for_label }}">Пароль</label>
+  <label for="{{ form.password.id_for_label }}">{% translate "Пароль" %}</label>
   {{ form.password }}
   <input type="hidden" name="next" value="{{ next }}">
-  <button type="submit">Войти</button>
+  <button type="submit">{% translate "Войти" %}</button>
 </form>
-<p class="hint">Регистрация — только по приглашению.</p>
+<p class="hint">{% translate "Регистрация — только по приглашению." %}</p>
 {% endblock %}
