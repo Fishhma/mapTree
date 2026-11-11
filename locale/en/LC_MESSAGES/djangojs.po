@@ -9,6 +9,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: static/genealogy/person.js:41
+msgid "Сервер не отвечает. Изменения не сохранены."
+msgstr "The server is not responding. Changes were not saved."
+
+#: static/genealogy/person.js:123
+msgid "Сервер не отвечает. Материал не добавлен."
+msgstr "The server is not responding. The material was not added."
+
 #: static/genealogy/start.js:32
 msgid "Сервер ответил ошибкой."
 msgstr "The server returned an error."

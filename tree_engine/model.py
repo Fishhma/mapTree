@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from . import _
+
 MONTHS = {m: i for i, m in enumerate(
     "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(), start=1)}
 MONTH_CODES = {i: m for m, i in MONTHS.items()}
@@ -307,14 +309,14 @@ class Tree:
         problems = []
         for f in self.families.values():
             if len(f.partners) > 2:
-                problems.append(f"Семья {f.id}: больше двух партнёров")
+                problems.append(_("Семья %(id)s: больше двух партнёров") % {"id": f.id})
             for pid in f.partners + f.children:
                 if pid not in self.people:
-                    problems.append(f"Семья {f.id}: ссылка на несуществующего {pid}")
+                    problems.append(_("Семья %(id)s: ссылка на несуществующего %(pid)s") % {"id": f.id, "pid": pid})
         if self.people:
             start = next(iter(self.people))
             if len(self.connected_from(start)) != len(self.people):
-                problems.append("В древе есть островки, не связанные с остальными")
+                problems.append(_("В древе есть островки, не связанные с остальными"))
         return problems
 
     def connected_from(self, pid: str, exclude: str | None = None) -> set[str]:
@@ -339,8 +341,8 @@ def deletion_blockers(tree: Tree, pid: str) -> list[str]:
     """
     reasons = []
     if tree.parents(pid) and tree.children(pid):
-        reasons.append("у человека есть и родители, и дети — он в середине линии древа")
+        reasons.append(_("у человека есть и родители, и дети — он в середине линии древа"))
     rest = [p for p in tree.people if p != pid]
     if rest and len(tree.connected_from(rest[0], exclude=pid)) != len(rest):
-        reasons.append("после удаления часть древа окажется оторванной (островок)")
+        reasons.append(_("после удаления часть древа окажется оторванной (островок)"))
     return reasons

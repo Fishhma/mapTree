@@ -202,8 +202,8 @@ def add_material_view(request, code):
             return JsonResponse({"status": "error", "message": str(exc)}, status=400)
         messages.error(request, str(exc))
         return redirect(reverse("person-page", args=[code]) + "#" + MATERIAL_TABS.get(category, ("about",))[0])
-    notice = (f"Такой файл уже есть: «{source.title}». Он привязан к этому человеку."
-              if existed else f"Добавлено: «{source.title}».")
+    notice = (_("Такой файл уже есть: «%(title)s». Он привязан к этому человеку.") if existed
+              else _("Добавлено: «%(title)s».")) % {"title": source.title}
     tab, template = MATERIAL_TABS[category]
     if not is_fetch:
         messages.success(request, notice)
@@ -214,16 +214,16 @@ def add_material_view(request, code):
     return JsonResponse({"status": "success", "tab": tab, "count": len(items), "html": html})
 
 
-def _save_person(person, forms_) -> str:
-    """Сохранить все формы страницы. Возвращает текст для уведомления."""
+def _save_person(person, forms_) -> tuple[str, str]:
+    """Сохранить все формы страницы. Возвращает (текст уведомления, вид: success / info)."""
     if not any(f.has_changed() for f in forms_.values()):
-        return "Изменений нет."
+        return _("Изменений нет."), "info"
     with transaction.atomic():
         forms_["form"].save()
         save_key_events(person, forms_["events_form"].events, forms_["events_form"].cleaned_data)
         forms_["other_events"].save()
         forms_["names"].save()
-    return "Изменения сохранены."
+    return _("Изменения сохранены."), "success"
 
 
 def person_page(request, code):
@@ -247,15 +247,14 @@ def person_page(request, code):
                 return JsonResponse({"status": "error", "message": str(exc)}, status=400)
             delete_error = str(exc)
         else:
-            messages.success(request, f"{person.code} удалён(а).")
+            messages.success(request, _("%(code)s удалён(а).") % {"code": person.code})
             if is_fetch:
                 return JsonResponse({"status": "deleted", "redirect": reverse("tree")})
             return redirect("tree")
     elif request.method == "POST":
         bound = person_forms(person, request.POST)
         if all(f.is_valid() for f in bound.values()):
-            notice = _save_person(person, bound)
-            notice_kind = "success" if notice == "Изменения сохранены." else "info"
+            notice, notice_kind = _save_person(person, bound)
             if not is_fetch:
                 messages.add_message(request, messages.SUCCESS if notice_kind == "success" else messages.INFO,
                                      notice)
@@ -263,7 +262,7 @@ def person_page(request, code):
             person.refresh_from_db()
             forms_ = person_forms(person)
         else:
-            forms_, notice, notice_kind = bound, "Проверьте выделенные поля.", "error"
+            forms_, notice, notice_kind = bound, _("Проверьте выделенные поля."), "error"
 
     context = _person_context(person, forms_, notice, notice_kind, delete_error)
     if is_fetch:

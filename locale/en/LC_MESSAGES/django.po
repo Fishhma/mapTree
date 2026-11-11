@@ -78,6 +78,30 @@ msgstr "Unknown kind of relationship."
 msgid "У человека уже указаны оба родителя."
 msgstr "Both parents of this person are already set."
 
+#: genealogy/editing.py:136
+msgid "События и факты: %(n)s"
+msgstr "Events and facts: %(n)s"
+
+#: genealogy/editing.py:137
+msgid "Варианты имени: %(n)s"
+msgstr "Name variants: %(n)s"
+
+#: genealogy/editing.py:138
+msgid "Ссылки на источники: %(n)s (сами источники останутся)"
+msgstr "Source links: %(n)s (the sources themselves stay)"
+
+#: genealogy/editing.py:174
+msgid "Неизвестный раздел."
+msgstr "Unknown section."
+
+#: genealogy/editing.py:176
+msgid "Выберите изображение."
+msgstr "Choose an image."
+
+#: genealogy/editing.py:178
+msgid "Можно загрузить только изображение: JPG, PNG, GIF, WEBP, TIFF или BMP."
+msgstr "Only images can be uploaded: JPG, PNG, GIF, WEBP, TIFF or BMP."
+
 #: genealogy/editing.py:71
 msgid "Этот союз не относится к выбранному человеку."
 msgstr "This union does not belong to the selected person."
@@ -86,9 +110,44 @@ msgstr "This union does not belong to the selected person."
 msgid "У этой семьи уже указаны оба родителя."
 msgstr "This family already has both parents."
 
+#: genealogy/editing.py:149
+msgid "Удалить нельзя: %(reasons)s."
+msgstr "Cannot delete: %(reasons)s."
+
+#: genealogy/editing.py:151
+msgid "Номер не совпадает. Чтобы удалить, введите %(code)s."
+msgstr "The number does not match. To delete, type %(code)s."
+
 #: genealogy/forms.py:12
 msgid "10.08.1962 · около 1850 · до 1790 · после 1900 · 1850-52 · 1850/51"
 msgstr "10.08.1962 · about 1850 · before 1790 · after 1900 · 1850-52 · 1850/51"
+
+#: genealogy/forms.py:59
+#: genealogy/forms.py:43
+#: genealogy/models.py:199
+#: genealogy/models.py:240
+msgid "место"
+msgstr "place"
+
+#: genealogy/forms.py:65
+#: genealogy/models.py:192
+#: genealogy/models.py:324
+msgid "название"
+msgstr "title"
+
+#: genealogy/forms.py:65
+#: genealogy/models.py:241
+msgid "значение"
+msgstr "value"
+
+#: genealogy/forms.py:39
+#: genealogy/models.py:236
+msgid "дата"
+msgstr "date"
+
+#: genealogy/forms.py:71
+msgid "— выберите —"
+msgstr "— choose —"
 
 #: genealogy/importer.py:13
 msgid "Кремация"
@@ -110,148 +169,462 @@ msgstr "The tree already has people in it."
 msgid "Человек %(gid)s не найден в файле."
 msgstr "Person %(gid)s was not found in the file."
 
-#: genealogy/models.py:57
+#: genealogy/models.py:29
+msgid "следующий номер"
+msgstr "next number"
+
+#: genealogy/models.py:31
+#: genealogy/models.py:86
+msgid "создано"
+msgstr "created"
+
+#: genealogy/models.py:34
+#: genealogy/models.py:112
+#: genealogy/models.py:165
+#: genealogy/models.py:191
+#: genealogy/models.py:321
+msgid "древо"
+msgstr "tree"
+
+#: genealogy/models.py:35
+msgid "древа"
+msgstr "trees"
+
+#: genealogy/models.py:58
 msgid "язык"
 msgstr "language"
 
-#: genealogy/models.py:60
+#: genealogy/models.py:61
 msgid "настройки пользователя"
 msgstr "user settings"
 
-#: genealogy/models.py:61
+#: genealogy/models.py:62
 msgid "настройки пользователей"
 msgstr "user settings"
 
-#: genealogy/models.py:56
+#: genealogy/models.py:83
+msgid "код"
+msgstr "code"
+
+#: genealogy/models.py:84
+msgid "для кого"
+msgstr "for whom"
+
+#: genealogy/models.py:87
+msgid "действует до"
+msgstr "valid until"
+
+#: genealogy/models.py:90
+msgid "когда использовано"
+msgstr "used at"
+
+#: genealogy/models.py:93
+msgid "приглашение"
+msgstr "invitation"
+
+#: genealogy/models.py:94
+msgid "приглашения"
+msgstr "invitations"
+
+#: genealogy/models.py:113
+msgid "номер"
+msgstr "number"
+
+#: genealogy/models.py:114
+#: genealogy/models.py:282
+msgid "имя"
+msgstr "given name"
+
+#: genealogy/models.py:115
+#: genealogy/models.py:283
+msgid "отчество"
+msgstr "patronymic"
+
+#: genealogy/models.py:117
+msgid "фамилия при рождении"
+msgstr "surname at birth"
+
+#: genealogy/models.py:119
+msgid "пол"
+msgstr "sex"
+
+#: genealogy/models.py:121
+msgid "жив(а)"
+msgstr "living"
+
+#: genealogy/models.py:127
+msgid "порядок среди детей"
+msgstr "order among children"
+
+#: genealogy/models.py:129
+msgid "краткое жизнеописание"
+msgstr "short biography"
+
+#: genealogy/models.py:134
+#: genealogy/models.py:230
+#: genealogy/models.py:378
+msgid "человек"
+msgstr "person"
+
+#: genealogy/models.py:135
+msgid "люди"
+msgstr "people"
+
+#: genealogy/models.py:170
+#: genealogy/models.py:196
+msgid "заметки"
+msgstr "notes"
+
+#: genealogy/models.py:173
+#: genealogy/models.py:232
+msgid "семья"
+msgstr "family"
+
+#: genealogy/models.py:174
+msgid "семьи"
+msgstr "families"
+
+#: genealogy/models.py:194
+msgid "широта"
+msgstr "latitude"
+
+#: genealogy/models.py:195
+msgid "долгота"
+msgstr "longitude"
+
+#: genealogy/models.py:200
+msgid "места"
+msgstr "places"
+
+#: genealogy/models.py:233
+#: genealogy/models.py:281
+#: genealogy/models.py:325
+msgid "тип"
+msgstr "type"
+
+#: genealogy/models.py:234
+msgid "название (для «Другое»)"
+msgstr "title (for “Other”)"
+
+#: genealogy/models.py:243
+msgid "описание"
+msgstr "description"
+
+#: genealogy/models.py:246
+msgid "событие / факт"
+msgstr "event / fact"
+
+#: genealogy/models.py:247
+msgid "события и факты"
+msgstr "events and facts"
+
+#: genealogy/models.py:284
+msgid "фамилия"
+msgstr "surname"
+
+#: genealogy/models.py:285
+msgid "с какого времени"
+msgstr "since"
+
+#: genealogy/models.py:286
+msgid "примечание"
+msgstr "note"
+
+#: genealogy/models.py:289
+msgid "вариант имени"
+msgstr "name variant"
+
+#: genealogy/models.py:290
+msgid "варианты имени"
+msgstr "name variants"
+
+#: genealogy/models.py:322
+msgid "раздел"
+msgstr "section"
+
+#: genealogy/models.py:326
+msgid "дата события"
+msgstr "event date"
+
+#: genealogy/models.py:327
+msgid "добавлен"
+msgstr "added"
+
+#: genealogy/models.py:328
+msgid "где хранится"
+msgstr "where it is kept"
+
+#: genealogy/models.py:330
+msgid "шифр / ссылка"
+msgstr "reference / link"
+
+#: genealogy/models.py:331
+msgid "заметки / расшифровка"
+msgstr "notes / transcription"
+
+#: genealogy/models.py:334
+#: genealogy/models.py:376
+msgid "источник"
+msgstr "source"
+
+#: genealogy/models.py:335
+msgid "источники"
+msgstr "sources"
+
+#: genealogy/models.py:356
+#: genealogy/models.py:362
+msgid "файл"
+msgstr "file"
+
+#: genealogy/models.py:357
+msgid "подпись"
+msgstr "caption"
+
+#: genealogy/models.py:358
+msgid "отпечаток файла"
+msgstr "file fingerprint"
+
+#: genealogy/models.py:363
+msgid "файлы (сканы, фото)"
+msgstr "files (scans, photos)"
+
+#: genealogy/models.py:381
+msgid "где именно"
+msgstr "where exactly"
+
+#: genealogy/models.py:385
+msgid "ссылка на источник"
+msgstr "source link"
+
+#: genealogy/models.py:386
+msgid "ссылки на источники"
+msgstr "source links"
+
+#: genealogy/models.py:26
+msgid "владелец"
+msgstr "owner"
+
+#: genealogy/models.py:28
+msgid "опорный человек (поколение 1)"
+msgstr "home person (generation 1)"
+
+#: genealogy/models.py:30
+msgid "Номер, который получит следующий новый человек."
+msgstr "The number the next new person will get."
+
+#: genealogy/models.py:57
 msgid "пользователь"
 msgstr "user"
 
-#: genealogy/models.py:106
+#: genealogy/models.py:85
+msgid "Только для вас: кому отправили ссылку."
+msgstr "Only for you: who the link was sent to."
+
+#: genealogy/models.py:89
+msgid "кто зарегистрировался"
+msgstr "registered user"
+
+#: genealogy/models.py:107
 #: templates/genealogy/_start.html:31
 msgid "Мужской"
 msgstr "Male"
 
-#: genealogy/models.py:107
+#: genealogy/models.py:108
 #: templates/genealogy/_start.html:32
 msgid "Женский"
 msgstr "Female"
 
-#: genealogy/models.py:108
+#: genealogy/models.py:109
 msgid "Неизвестен"
 msgstr "Unknown"
 
-#: genealogy/models.py:210
+#: genealogy/models.py:118
+msgid "Для женщин — девичья. Смена фамилии хранится в вариантах имени."
+msgstr "For women — the maiden name. Surname changes are kept in the name variants."
+
+#: genealogy/models.py:122
+msgid "Без даты смерти в древе: у живых «2007–», у остальных «1849–?»."
+msgstr "Without a death date the tree shows “2007–” for the living and “1849–?” for others."
+
+#: genealogy/models.py:124
+msgid "семья родителей"
+msgstr "parents' family"
+
+#: genealogy/models.py:128
+msgid "Нужен, только если дат рождения нет, а порядок известен."
+msgstr "Only needed when birth dates are missing but the order is known."
+
+#: genealogy/models.py:166
+msgid "партнёр 1"
+msgstr "partner 1"
+
+#: genealogy/models.py:168
+msgid "партнёр 2"
+msgstr "partner 2"
+
+#: genealogy/models.py:193
+msgid "Например: Boskovice, Blansko, Чехия"
+msgstr "For example: Boskovice, Blansko, Czechia"
+
+#: genealogy/models.py:211
 msgid "Рождение"
 msgstr "Birth"
 
-#: genealogy/models.py:211
+#: genealogy/models.py:212
 msgid "Крещение"
 msgstr "Christening"
 
-#: genealogy/models.py:212
+#: genealogy/models.py:213
 msgid "Смерть"
 msgstr "Death"
 
-#: genealogy/models.py:213
+#: genealogy/models.py:214
 msgid "Погребение"
 msgstr "Burial"
 
-#: genealogy/models.py:214
+#: genealogy/models.py:215
+#: genealogy/timeline.py:34
+#: genealogy/timeline.py:36
 msgid "Брак"
 msgstr "Marriage"
 
-#: genealogy/models.py:215
+#: genealogy/models.py:216
+#: genealogy/timeline.py:39
 msgid "Развод"
 msgstr "Divorce"
 
-#: genealogy/models.py:216
+#: genealogy/models.py:217
 msgid "Место жительства"
 msgstr "Residence"
 
-#: genealogy/models.py:217
+#: genealogy/models.py:218
 msgid "Образование"
 msgstr "Education"
 
-#: genealogy/models.py:218
+#: genealogy/models.py:219
 msgid "Военная служба"
 msgstr "Military service"
 
-#: genealogy/models.py:219
+#: genealogy/models.py:220
 msgid "Эмиграция"
 msgstr "Emigration"
 
-#: genealogy/models.py:220
+#: genealogy/models.py:221
 msgid "Профессия"
 msgstr "Occupation"
 
-#: genealogy/models.py:221
+#: genealogy/models.py:222
 msgid "Вероисповедание"
 msgstr "Religion"
 
-#: genealogy/models.py:222
+#: genealogy/models.py:223
 msgid "Национальность"
 msgstr "Nationality"
 
-#: genealogy/models.py:223
-#: genealogy/models.py:317
+#: genealogy/models.py:224
+#: genealogy/models.py:318
 msgid "Другое"
 msgstr "Other"
 
-#: genealogy/models.py:273
+#: genealogy/models.py:237
+msgid "10.08.1962 · 1962 · около 1850 · до 1790 · после 1900 · 1850-1860"
+msgstr "10.08.1962 · 1962 · about 1850 · before 1790 · after 1900 · 1850-1860"
+
+#: genealogy/models.py:242
+msgid "Для фактов: например, «кузнец»"
+msgstr "For facts: for example, “blacksmith”"
+
+#: genealogy/models.py:274
 msgid "В браке"
 msgstr "Married name"
 
-#: genealogy/models.py:274
+#: genealogy/models.py:275
 msgid "Смена фамилии"
 msgstr "Surname change"
 
-#: genealogy/models.py:275
+#: genealogy/models.py:276
 msgid "Также известен как"
 msgstr "Also known as"
 
-#: genealogy/models.py:276
+#: genealogy/models.py:277
 msgid "Другое написание / транслитерация"
 msgstr "Other spelling / transliteration"
 
-#: genealogy/models.py:277
+#: genealogy/models.py:278
 msgid "Имя при крещении"
 msgstr "Baptismal name"
 
-#: genealogy/models.py:306
+#: genealogy/models.py:307
 msgid "Источник"
 msgstr "Source"
 
-#: genealogy/models.py:307
+#: genealogy/models.py:308
 msgid "Воспоминание"
 msgstr "Memory"
 
-#: genealogy/models.py:310
+#: genealogy/models.py:311
 msgid "Запись о рождении"
 msgstr "Birth record"
 
-#: genealogy/models.py:311
+#: genealogy/models.py:312
 msgid "Запись о крещении"
 msgstr "Baptism record"
 
-#: genealogy/models.py:312
+#: genealogy/models.py:313
 msgid "Запись о браке"
 msgstr "Marriage record"
 
-#: genealogy/models.py:313
+#: genealogy/models.py:314
 msgid "Запись о смерти"
 msgstr "Death record"
 
-#: genealogy/models.py:314
+#: genealogy/models.py:315
 msgid "Перепись"
 msgstr "Census"
 
-#: genealogy/models.py:315
+#: genealogy/models.py:316
 msgid "Фотография"
 msgstr "Photograph"
 
-#: genealogy/models.py:316
+#: genealogy/models.py:317
 msgid "Письмо / личный документ"
 msgstr "Letter / personal document"
+
+#: genealogy/models.py:329
+msgid "Архив, книга, семейный альбом…"
+msgstr "Archive, book, family album…"
+
+#: genealogy/models.py:359
+msgid "По нему узнаётся повторная загрузка того же файла."
+msgstr "Used to recognise a repeated upload of the same file."
+
+#: genealogy/models.py:380
+msgid "событие"
+msgstr "event"
+
+#: genealogy/models.py:382
+msgid "Страница, строка, кто на фото слева направо…"
+msgstr "Page, line, who is in the photo from left to right…"
+
+#: genealogy/models.py:38
+msgid "Древо %(owner)s"
+msgstr "Tree of %(owner)s"
+
+#: genealogy/models.py:39
+msgid "Древо №%(pk)s (без владельца)"
+msgstr "Tree #%(pk)s (no owner)"
+
+#: genealogy/models.py:98
+msgid "Приглашение от %(date)s"
+msgstr "Invitation of %(date)s"
+
+#: genealogy/models.py:178
+msgid "Семья №%(pk)s (родители неизвестны)"
+msgstr "Family #%(pk)s (parents unknown)"
+
+#: genealogy/models.py:182
+msgid "Партнёры должны быть разными людьми."
+msgstr "The partners must be different people."
 
 #: genealogy/onboarding.py:68
 msgid "Выберите файл GEDCOM (.ged)."
@@ -277,14 +650,86 @@ msgstr "The tree already has people in it. Import is only possible into an empty
 msgid "Файл не в кодировке UTF-8: некоторые буквы могут отображаться неверно."
 msgstr "The file is not in UTF-8 encoding: some letters may be shown incorrectly."
 
+#: genealogy/timeline.py:41
+msgid "Рождение ребёнка"
+msgstr "Birth of a child"
+
+#: genealogy/timeline.py:41
+msgid "Рождение сына"
+msgstr "Birth of a son"
+
+#: genealogy/timeline.py:41
+msgid "Рождение дочери"
+msgstr "Birth of a daughter"
+
+#: genealogy/views.py:226
+msgid "Изменения сохранены."
+msgstr "Changes saved."
+
 #: genealogy/views.py:52
 msgid "Древо пустое"
 msgstr "The tree is empty"
+
+#: genealogy/views.py:205
+msgid "Такой файл уже есть: «%(title)s». Он привязан к этому человеку."
+msgstr "This file already exists: “%(title)s”. It has been linked to this person."
+
+#: genealogy/views.py:206
+msgid "Добавлено: «%(title)s»."
+msgstr "Added: “%(title)s”."
+
+#: genealogy/views.py:220
+msgid "Изменений нет."
+msgstr "No changes."
 
 #: genealogy/views.py:138
 #: genealogy/views.py:136
 msgid "Неверный запрос."
 msgstr "Invalid request."
+
+#: genealogy/views.py:250
+msgid "%(code)s удалён(а)."
+msgstr "%(code)s deleted."
+
+#: genealogy/views.py:265
+msgid "Проверьте выделенные поля."
+msgstr "Check the highlighted fields."
+
+#: tree_engine/generations.py:58
+msgid "Цикл в предках: человек оказался собственным предком"
+msgstr "A cycle in ancestors: a person turned out to be their own ancestor"
+
+#: tree_engine/generations.py:43
+msgid "%(pid)s не связан с опорным человеком"
+msgstr "%(pid)s is not connected to the home person"
+
+#: tree_engine/generations.py:68
+msgid "Супруги %(a)s и %(b)s в разных поколениях (%(ga)s и %(gb)s)"
+msgstr "Spouses %(a)s and %(b)s are in different generations (%(ga)s and %(gb)s)"
+
+#: tree_engine/generations.py:73
+msgid "%(parent)s выше ребёнка %(child)s на %(n)s поколения"
+msgstr "%(parent)s is %(n)s generations above child %(child)s"
+
+#: tree_engine/model.py:344
+msgid "у человека есть и родители, и дети — он в середине линии древа"
+msgstr "the person has both parents and children — they are in the middle of a line"
+
+#: tree_engine/model.py:347
+msgid "после удаления часть древа окажется оторванной (островок)"
+msgstr "after deletion part of the tree would be cut off (an island)"
+
+#: tree_engine/model.py:319
+msgid "В древе есть островки, не связанные с остальными"
+msgstr "The tree has islands not connected to the rest"
+
+#: tree_engine/model.py:312
+msgid "Семья %(id)s: больше двух партнёров"
+msgstr "Family %(id)s: more than two partners"
+
+#: tree_engine/model.py:315
+msgid "Семья %(id)s: ссылка на несуществующего %(pid)s"
+msgstr "Family %(id)s: link to a non-existent %(pid)s"
 
 #: templates/genealogy/_account_fields.html:8
 #: templates/registration/register.html:14
@@ -297,6 +742,209 @@ msgstr "At least 8 characters, not only digits and not too simple."
 #: templates/genealogy/account.html:14
 msgid "Аккаунт"
 msgstr "Account"
+
+#: templates/genealogy/_formset_row.html:7
+msgid "удалить"
+msgstr "delete"
+
+#: templates/genealogy/_person_about.html:9
+msgid "Основное"
+msgstr "Basics"
+
+#: templates/genealogy/_person_about.html:19
+msgid "Жив(а)"
+msgstr "Living"
+
+#: templates/genealogy/_person_about.html:24
+msgid "Ключевые сведения"
+msgstr "Key facts"
+
+#: templates/genealogy/_person_about.html:25
+#: templates/genealogy/_person_materials.html:49
+#: templates/genealogy/_start.html:38
+msgid "Даты можно писать так:"
+msgstr "Dates can be written like this:"
+
+#: templates/genealogy/_person_about.html:29
+msgid "Дата"
+msgstr "Date"
+
+#: templates/genealogy/_person_about.html:30
+msgid "Место"
+msgstr "Place"
+
+#: templates/genealogy/_person_about.html:38
+msgid "Другие сведения"
+msgstr "Other details"
+
+#: templates/genealogy/_person_about.html:39
+#: templates/genealogy/_person_about.html:40
+msgid "События и факты"
+msgstr "Events and facts"
+
+#: templates/genealogy/_person_about.html:39
+#: templates/genealogy/_person_about.html:43
+msgid "Варианты имени"
+msgstr "Name variants"
+
+#: templates/genealogy/_person_about.html:41
+msgid "Переезды, учёба, служба, профессия, вероисповедание… Для «Другое» укажите название."
+msgstr "Moves, studies, service, occupation, religion… For “Other”, enter a title."
+
+#: templates/genealogy/_person_about.html:44
+msgid "Фамилия в браке, после развода, другое написание."
+msgstr "Married name, name after divorce, other spelling."
+
+#: templates/genealogy/_person_about.html:50
+msgid "Жизнеописание"
+msgstr "Biography"
+
+#: templates/genealogy/_person_about.html:55
+#: templates/genealogy/_person_materials.html:52
+#: templates/genealogy/account.html:28
+msgid "Сохранить"
+msgstr "Save"
+
+#: templates/genealogy/_person_about.html:56
+msgid "Все поля необязательны."
+msgstr "All fields are optional."
+
+#: templates/genealogy/_person_about.html:64
+msgid "События"
+msgstr "Events"
+
+#: templates/genealogy/_person_about.html:76
+#: templates/genealogy/_person_about.html:42
+#: templates/genealogy/_person_about.html:45
+#: templates/genealogy/_person_materials.html:33
+msgid "Пока нет"
+msgstr "None yet"
+
+#: templates/genealogy/_person_about.html:80
+msgid "Семья"
+msgstr "Family"
+
+#: templates/genealogy/_person_about.html:81
+msgid "Родители"
+msgstr "Parents"
+
+#: templates/genealogy/_person_about.html:84
+msgid "Не указаны"
+msgstr "Not set"
+
+#: templates/genealogy/_person_about.html:86
+msgid "Браки и дети"
+msgstr "Marriages and children"
+
+#: templates/genealogy/_person_about.html:86
+msgid "Супруг(а) и дети"
+msgstr "Spouse and children"
+
+#: templates/genealogy/_person_about.html:91
+msgid "Партнёр неизвестен"
+msgstr "Partner unknown"
+
+#: templates/genealogy/_person_about.html:97
+msgid "Нет"
+msgstr "None"
+
+#: templates/genealogy/_person_about.html:100
+msgid "Братья и сёстры"
+msgstr "Siblings"
+
+#: templates/genealogy/_person_about.html:108
+msgid "Удаление"
+msgstr "Deletion"
+
+#: templates/genealogy/_person_about.html:110
+msgid "Удалить нельзя:"
+msgstr "Cannot delete:"
+
+#: templates/genealogy/_person_about.html:114
+msgid "Удалить человека…"
+msgstr "Delete this person…"
+
+#: templates/genealogy/_person_about.html:117
+msgid "Вместе с ним (с ней):"
+msgstr "Together with them:"
+
+#: templates/genealogy/_person_about.html:124
+msgid "Для подтверждения введите номер человека:"
+msgstr "To confirm, type the person's number:"
+
+#: templates/genealogy/_person_about.html:128
+msgid "Удалить навсегда"
+msgstr "Delete forever"
+
+#: templates/genealogy/_person_about.html:42
+msgid "Добавить событие или факт"
+msgstr "Add an event or fact"
+
+#: templates/genealogy/_person_about.html:45
+msgid "Добавить вариант имени"
+msgstr "Add a name variant"
+
+#: templates/genealogy/_person_about.html:69
+msgid "дата неизвестна"
+msgstr "date unknown"
+
+#: templates/genealogy/_person_about.html:115
+msgid "Будет удалён(а) <strong>%(name)s</strong> — безвозвратно."
+msgstr "<strong>%(name)s</strong> will be deleted — permanently."
+
+#: templates/genealogy/_person_materials.html:6
+msgid "Добавить"
+msgstr "Add"
+
+#: templates/genealogy/_person_materials.html:18
+msgid "нет изображения"
+msgstr "no image"
+
+#: templates/genealogy/_person_materials.html:24
+msgid "Также у:"
+msgstr "Also with:"
+
+#: templates/genealogy/_person_materials.html:43
+msgid "Изображение"
+msgstr "Image"
+
+#: templates/genealogy/_person_materials.html:47
+msgid "Название"
+msgstr "Title"
+
+#: templates/genealogy/_person_materials.html:48
+msgid "Дата события"
+msgstr "Event date"
+
+#: templates/genealogy/_person_materials.html:53
+msgid "Отмена"
+msgstr "Cancel"
+
+#: templates/genealogy/_person_memories.html:1
+#: templates/genealogy/person.html:23
+msgid "Воспоминания"
+msgstr "Memories"
+
+#: templates/genealogy/_person_memories.html:1
+msgid "Новое воспоминание"
+msgstr "New memory"
+
+#: templates/genealogy/_person_memories.html:1
+msgid "Фотографии человека и его работы. Одна семейная фотография может быть у каждого, кто на ней есть."
+msgstr "Photos of the person and their work. One family photo can be linked to everyone in it."
+
+#: templates/genealogy/_person_sources.html:1
+#: templates/genealogy/person.html:22
+msgid "Источники"
+msgstr "Sources"
+
+#: templates/genealogy/_person_sources.html:1
+msgid "Новый источник"
+msgstr "New source"
+
+#: templates/genealogy/_person_sources.html:1
+msgid "Документы, подтверждающие события жизни: записи о рождении, браке, смерти, рождении детей, упоминания имени. Один документ может относиться к нескольким людям."
+msgstr "Documents that confirm life events: records of birth, marriage, death, children's births, mentions of the name. One document can belong to several people."
 
 #: templates/genealogy/_start.html:6
 msgid "С чего начнём?"
@@ -349,10 +997,6 @@ msgstr "Date of birth"
 #: templates/genealogy/_start.html:36
 msgid "Место рождения"
 msgstr "Place of birth"
-
-#: templates/genealogy/_start.html:38
-msgid "Даты можно писать так:"
-msgstr "Dates can be written like this:"
 
 #: templates/genealogy/_start.html:41
 #: templates/genealogy/_start.html:52
@@ -412,6 +1056,7 @@ msgid "Древо"
 msgstr "Family Tree"
 
 #: templates/genealogy/account.html:7
+#: templates/genealogy/person.html:15
 #: templates/registration/invite_invalid.html:8
 msgid "К древу"
 msgstr "Back to the tree"
@@ -423,10 +1068,6 @@ msgstr "Sign out"
 #: templates/genealogy/account.html:22
 msgid "Язык"
 msgstr "Language"
-
-#: templates/genealogy/account.html:28
-msgid "Сохранить"
-msgstr "Save"
 
 #: templates/genealogy/account.html:39
 msgid "Сменить логин"
@@ -487,6 +1128,14 @@ msgstr "Your account and the whole tree will be deleted: people, families, place
 #: templates/genealogy/account.html:89
 msgid "Вы — единственный администратор сайта, поэтому свою учётную запись удалить нельзя: иначе в админку никто не войдёт. Древо можно очистить выше."
 msgstr "You are the only administrator of the site, so your account cannot be deleted — otherwise nobody could sign in to the admin. You can clear the tree above."
+
+#: templates/genealogy/person.html:20
+msgid "Разделы карточки"
+msgstr "Card sections"
+
+#: templates/genealogy/person.html:21
+msgid "О человеке"
+msgstr "About"
 
 #: templates/genealogy/tree.html:6
 #: templates/genealogy/tree.html:13

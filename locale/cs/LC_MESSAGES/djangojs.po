@@ -9,6 +9,14 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
 
+#: static/genealogy/person.js:41
+msgid "Сервер не отвечает. Изменения не сохранены."
+msgstr "Server neodpovídá. Změny nebyly uloženy."
+
+#: static/genealogy/person.js:123
+msgid "Сервер не отвечает. Материал не добавлен."
+msgstr "Server neodpovídá. Materiál nebyl přidán."
+
 #: static/genealogy/start.js:32
 msgid "Сервер ответил ошибкой."
 msgstr "Server vrátil chybu."

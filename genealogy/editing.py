@@ -133,11 +133,11 @@ def save_key_events(person: Person, events: dict[str, Event], data: dict) -> Non
 def deletion_summary(person: Person) -> list[str]:
     """Что исчезнет вместе с человеком — показывается перед удалением."""
     items = []
-    for count, word in ((person.events.count(), "событий и фактов"),
-                        (person.names.count(), "вариантов имени"),
-                        (person.citations.count(), "ссылок на источники (сами источники останутся)")):
+    for count, text in ((person.events.count(), _("События и факты: %(n)s")),
+                        (person.names.count(), _("Варианты имени: %(n)s")),
+                        (person.citations.count(), _("Ссылки на источники: %(n)s (сами источники останутся)"))):
         if count:
-            items.append(f"{word}: {count}")
+            items.append(text % {"n": count})
     return items
 
 
@@ -146,9 +146,9 @@ def delete_person(person: Person, typed_code: str) -> None:
     """Удаление — второе подтверждение: нужно ввести номер именно этого человека."""
     blockers = person.deletion_blockers()
     if blockers:
-        raise EditError("Удалить нельзя: " + "; ".join(blockers) + ".")
+        raise EditError(_("Удалить нельзя: %(reasons)s.") % {"reasons": "; ".join(blockers)})
     if typed_code.strip().upper() != person.code:
-        raise EditError(f"Номер не совпадает. Чтобы удалить, введите {person.code}.")
+        raise EditError(_("Номер не совпадает. Чтобы удалить, введите %(code)s.") % {"code": person.code})
     person.delete()
 
 
@@ -171,11 +171,11 @@ def add_material(person: Person, category: str, upload, title: str = "", date: s
     существующий материал просто привязывается к человеку. Возвращает (материал, был_ли_уже).
     """
     if category not in Source.Category.values:
-        raise EditError("Неизвестный раздел.")
+        raise EditError(_("Неизвестный раздел."))
     if upload is None:
-        raise EditError("Выберите изображение.")
+        raise EditError(_("Выберите изображение."))
     if Path(upload.name).suffix.lower().lstrip(".") not in IMAGE_EXTENSIONS:
-        raise EditError("Можно загрузить только изображение: JPG, PNG, GIF, WEBP, TIFF или BMP.")
+        raise EditError(_("Можно загрузить только изображение: JPG, PNG, GIF, WEBP, TIFF или BMP."))
     digest = file_sha256(upload)
     same = SourceFile.objects.select_related("source").filter(
         sha256=digest, source__category=category, source__tree=person.tree).first()

@@ -1,5 +1,5 @@
-{% load static %}<!doctype html>
-<html lang="ru">
+{% load static i18n %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,15 +12,15 @@
 <header class="masthead">
   <div class="masthead-inner">
     <nav class="top">
-      <a href="{% url 'tree' %}#{{ person.code }}">← К древу</a>
+      <a href="{% url 'tree' %}#{{ person.code }}">← {% translate "К древу" %}</a>
       {% include "genealogy/_avatar.html" %}
     </nav>
     <div id="person-header">{% include "genealogy/_person_header.html" %}</div>
     {# Вкладки — ссылки на #адрес: «Назад» в браузере возвращает на предыдущую вкладку, а с первой — к древу. #}
-    <nav class="tabs" role="tablist" aria-label="Разделы карточки">
-      <a href="#about" role="tab" data-tab="about">О человеке</a>
-      <a href="#sources" role="tab" data-tab="sources">Источники (<span data-count="sources">{{ sources|length }}</span>)</a>
-      <a href="#memories" role="tab" data-tab="memories">Воспоминания (<span data-count="memories">{{ memories|length }}</span>)</a>
+    <nav class="tabs" role="tablist" aria-label="{% translate 'Разделы карточки' %}">
+      <a href="#about" role="tab" data-tab="about">{% translate "О человеке" %}</a>
+      <a href="#sources" role="tab" data-tab="sources">{% translate "Источники" %} (<span data-count="sources">{{ sources|length }}</span>)</a>
+      <a href="#memories" role="tab" data-tab="memories">{% translate "Воспоминания" %} (<span data-count="memories">{{ memories|length }}</span>)</a>
     </nav>
   </div>
 </header>
@@ -30,6 +30,7 @@
   <div data-pane="sources" role="tabpanel" id="pane-sources" hidden>{% include "genealogy/_person_sources.html" %}</div>
   <div data-pane="memories" role="tabpanel" id="pane-memories" hidden>{% include "genealogy/_person_memories.html" %}</div>
 </main>
+<script src="{% url 'jsi18n' %}?l={{ LANGUAGE_CODE }}"></script>
 <script src="{% static 'genealogy/person.js' %}"></script>
 </body>
 </html>

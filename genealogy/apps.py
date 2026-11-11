@@ -9,7 +9,11 @@ class GenealogyConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        import tree_engine
+        from django.utils.translation import gettext
+
         from .i18n import compile_all
+        tree_engine.set_translator(gettext)   # сообщения ядра — на языке интерфейса
         try:
             compile_all()                 # .po новее .mo → пересобрать (GNU gettext не нужен)
         except OSError:

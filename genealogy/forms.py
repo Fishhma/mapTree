@@ -36,11 +36,11 @@ class KeyEventsForm(forms.Form):
         for kind in KEY_KINDS:
             event = self.events.get(kind)
             self.fields[f"{kind}_date"] = forms.CharField(
-                label="дата", required=False, max_length=60,
+                label=gettext_lazy("дата"), required=False, max_length=60,
                 initial=to_user_date(event.date, get_language()) if event and event.date else "",
                 widget=forms.TextInput(attrs={"autocomplete": "off"}))
             self.fields[f"{kind}_place"] = forms.CharField(
-                label="место", required=False, max_length=255,
+                label=gettext_lazy("место"), required=False, max_length=255,
                 initial=event.place.name if event and event.place else "",
                 widget=forms.TextInput(attrs={"list": "places", "autocomplete": "off"}))
 
@@ -56,19 +56,19 @@ OTHER_KINDS = [k for k in Event.Kind if k.value not in (*KEY_KINDS, "MARR", "DIV
 
 class OtherEventForm(forms.ModelForm):
     """Событие или факт (кроме ключевых). Место вводится текстом и находится/создаётся само."""
-    place_name = forms.CharField(label="место", required=False, max_length=255,
+    place_name = forms.CharField(label=gettext_lazy("место"), required=False, max_length=255,
                                  widget=forms.TextInput(attrs={"list": "places", "autocomplete": "off"}))
 
     class Meta:
         model = Event
         fields = ["kind", "title", "date", "place_name", "value", "description"]
-        labels = {"title": "название", "value": "значение"}
+        labels = {"title": gettext_lazy("название"), "value": gettext_lazy("значение")}
         widgets = {"date": forms.TextInput(attrs={"autocomplete": "off"}),
                    "description": forms.TextInput()}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["kind"].choices = [("", "— выберите —")] + [(k.value, k.label) for k in OTHER_KINDS]
+        self.fields["kind"].choices = [("", gettext_lazy("— выберите —"))] + [(k.value, k.label) for k in OTHER_KINDS]
         if self.instance.pk:
             self.initial["date"] = to_user_date(self.instance.date, get_language()) if self.instance.date else ""
             self.initial["place_name"] = self.instance.place.name if self.instance.place else ""

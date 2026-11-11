@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+from django.utils.translation import gettext as _
+
 from .models import Event, Person
 
 UNDATED = 99999999
@@ -29,14 +31,14 @@ def timeline(person: Person) -> list[dict]:
         events = list(fam.events.all())
         marriages = [e for e in events if e.kind == "MARR"]
         for e in marriages:
-            points.append(_event_point(e, "Брак", spouse))
+            points.append(_event_point(e, _("Брак"), spouse))
         if not marriages and spouse:
-            points.append(_point(UNDATED, "", "Брак", person=spouse))
+            points.append(_point(UNDATED, "", _("Брак"), person=spouse))
         for e in events:
             if e.kind == "DIV":
-                points.append(_event_point(e, "Развод", spouse))
+                points.append(_event_point(e, _("Развод"), spouse))
         for child in fam.children.all():
-            title = {"M": "Рождение сына", "F": "Рождение дочери"}.get(child.sex, "Рождение ребёнка")
+            title = {"M": _("Рождение сына"), "F": _("Рождение дочери")}.get(child.sex, _("Рождение ребёнка"))
             birth = next((e for k in BIRTH_KINDS for e in child.events.all() if e.kind == k), None)
             points.append(_event_point(birth, title, child) if birth
                           else _point(UNDATED, "", title, person=child))

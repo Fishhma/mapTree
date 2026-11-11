@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from collections import deque
 
+from . import _
+
 from .model import Tree
 
 
@@ -38,11 +40,11 @@ def assign_generations(tree: Tree, root: str) -> tuple[dict[str, int], list[str]
     bfs(root, 1)
     for pid in tree.people:            # островки: считаем отдельно и предупреждаем
         if pid not in gen:
-            warnings.append(f"{pid} не связан с опорным человеком")
+            warnings.append(_("%(pid)s не связан с опорным человеком") % {"pid": pid})
             bfs(pid, 1)
 
     # Родитель строго выше ребёнка. Поднимаем родителей, пока не сойдётся.
-    for _ in range(len(tree.people) + 1):
+    for _round in range(len(tree.people) + 1):
         changed = False
         for fam in tree.families.values():
             for child in fam.children:
@@ -53,7 +55,7 @@ def assign_generations(tree: Tree, root: str) -> tuple[dict[str, int], list[str]
         if not changed:
             break
     else:
-        raise ValueError("Цикл в предках: человек оказался собственным предком")
+        raise ValueError(_("Цикл в предках: человек оказался собственным предком"))
 
     # Нумерация снизу: самое младшее поколение — 1.
     shift = 1 - min(gen.values(), default=1)
@@ -63,9 +65,11 @@ def assign_generations(tree: Tree, root: str) -> tuple[dict[str, int], list[str]
         if len(fam.partners) == 2:
             a, b = fam.partners
             if gen[a] != gen[b]:
-                warnings.append(f"Супруги {a} и {b} в разных поколениях ({gen[a]} и {gen[b]})")
+                warnings.append(_("Супруги %(a)s и %(b)s в разных поколениях (%(ga)s и %(gb)s)")
+                                % {"a": a, "b": b, "ga": gen[a], "gb": gen[b]})
         for child in fam.children:
             for parent in fam.partners:
                 if gen[parent] - gen[child] > 1:
-                    warnings.append(f"{parent} выше ребёнка {child} на {gen[parent] - gen[child]} поколения")
+                    warnings.append(_("%(parent)s выше ребёнка %(child)s на %(n)s поколения")
+                                    % {"parent": parent, "child": child, "n": gen[parent] - gen[child]})
     return gen, warnings

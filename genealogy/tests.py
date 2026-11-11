@@ -1005,3 +1005,19 @@ msgstr ""
         self.assertIn("kolem 1850", catalog)                                      # подсказка формата дат в «+»
         self.client.post("/account/", {"action": "language", "language": "en"})
         self.assertContains(self.client.get("/"), "Whole tree")
+
+    def test_person_page_in_czech(self):
+        self.make_tree()
+        from .models import UserProfile
+        UserProfile.objects.update_or_create(user=self.user, defaults={"language": "cs"})
+        page = self.client.get(f"/people/{self.libor.code}/")
+        self.assertContains(page, '<html lang="cs">')
+        self.assertContains(page, "O osobě")                                   # вкладка «О человеке»
+        self.assertContains(page, "Rodné příjmení")                            # подпись поля из модели
+        self.assertContains(page, "Narození syna")                             # хронология
+        self.assertContains(page, "6. ledna 2007")                             # дата рождения сына
+        # сообщение ядра (почему нельзя удалить) — тоже по-чешски
+        self.assertContains(page, "osoba má rodiče i děti")
+        r = self.client.post(f"/people/{self.marian.code}/", {"action": "delete", "confirm_code": "P9999"},
+                             headers={"X-Requested-With": "fetch"})
+        self.assertIn("Číslo nesouhlasí", r.json()["message"])

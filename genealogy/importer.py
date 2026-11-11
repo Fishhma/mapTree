@@ -56,7 +56,7 @@ def import_tree(family_tree: FamilyTree, tree: Tree, root_gid: str | None = None
         if not name:
             return None
         if name not in places:
-            places[name], _ = Place.objects.get_or_create(tree=family_tree, name=name)
+            places[name], _created = Place.objects.get_or_create(tree=family_tree, name=name)
         return places[name]
 
     # Опорный человек получает P0001: импортируем его первым.

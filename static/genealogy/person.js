@@ -38,7 +38,7 @@ document.addEventListener("submit", async (e) => {
     });
     data = await res.json();
   } catch {
-    data = { status: "error", message: "Сервер не отвечает. Изменения не сохранены." };
+    data = { status: "error", message: gettext("Сервер не отвечает. Изменения не сохранены.") };
   }
   button.disabled = false;
 
@@ -120,7 +120,7 @@ document.addEventListener("submit", async (e) => {
     });
     data = await res.json();
   } catch {
-    data = { status: "error", message: "Сервер не отвечает. Материал не добавлен." };
+    data = { status: "error", message: gettext("Сервер не отвечает. Материал не добавлен.") };
   }
   button.disabled = false;
   if (data.status !== "success") {
